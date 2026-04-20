@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&display=swap');
+
+:root {
+  --bg: #0c0e14;
+  --surface: #13161f;
+  --surface-2: #1a1d28;
+  --surface-3: #21253a;
+  --border: rgba(255,255,255,0.07);
+  --border-2: rgba(255,255,255,0.12);
+  --text: #e8eaf2;
+  --text-muted: rgba(232,234,242,0.45);
+  --text-dim: rgba(232,234,242,0.25);
+  --accent: #6c63ff;
+  --accent-2: #8b83ff;
+  --accent-glow: rgba(108,99,255,0.2);
+  --green: #22d3a5;
+  --green-bg: rgba(34,211,165,0.1);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.1);
+  --red: #f87171;
+  --red-bg: rgba(248,113,113,0.1);
+  --blue: #60a5fa;
+  --blue-bg: rgba(96,165,250,0.1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
+
+/* ── Sidebar nav links ── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.active { background: var(--accent-glow); color: var(--accent-2); }
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Cards ── */
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  transition: all 0.25s;
+}
+.stat-card:hover {
+  border-color: var(--border-2);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+/* ── Buttons ── */
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  text-decoration: none;
+  white-space: nowrap;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.admin-btn-primary { background: var(--accent); color: white; }
+.admin-btn-primary:hover {
+  background: var(--accent-2);
+  box-shadow: 0 6px 20px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.admin-btn-ghost {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.admin-btn-ghost:hover { color: var(--text); border-color: var(--border-2); }
+.admin-btn-danger {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,0.2);
+}
+.admin-btn-danger:hover { background: rgba(248,113,113,0.15); }
+
+/* ── Table ── */
+.table-row { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+.table-row:hover { background: var(--surface-2); }
+
+/* ── Badges ── */
+.badge-green {
+  background: var(--green-bg); color: var(--green);
+  border: 1px solid rgba(34,211,165,0.2);
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 50px;
+}
+.badge-amber {
+  background: var(--amber-bg); color: var(--amber);
+  border: 1px solid rgba(245,158,11,0.2);
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 50px;
+}
+.badge-red {
+  background: var(--red-bg); color: var(--red);
+  border: 1px solid rgba(248,113,113,0.2);
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 50px;
+}
+.badge-blue {
+  background: var(--blue-bg); color: var(--blue);
+  border: 1px solid rgba(96,165,250,0.2);
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 50px;
+}
+
+/* ── Form inputs ── */
+.admin-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.admin-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.admin-input::placeholder { color: var(--text-dim); }
+
+.admin-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* ── Skeleton loader ── */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.skeleton {
+  animation: pulse 1.5s ease infinite;
+  background: var(--surface-2);
+  border-radius: 8px;
+}

@@ -531,7 +531,7 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  )
+  ) 
 }
 
 // Filter Sidebar Content Component
