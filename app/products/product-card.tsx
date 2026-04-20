@@ -50,15 +50,18 @@ export default function ProductCard({ product }: { product: any }) {
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
         <Link href={`/products/${product.slug}`} className="block h-full w-full">
           {product.main_image_url ? (
-            <img
+<img
               src={product.main_image_url}
               alt={product.name}
-              className="h-full w-full object-cover object-center transition-all duration-700 group-hover:scale-110 group-hover:rotate-1"
+              className="h-full w-full object-cover object-center transition-all duration-700 group-hover:scale-110 group-hover:rotate-1 shadow-lg hover:shadow-xl"
               loading="lazy"
+              onError={(e) => {
+                e.currentTarget.src = '/placeholder-product.jpg'
+              }}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
-              <span className="text-gray-300 text-6xl">📦</span>
+<div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+              <div className="text-gray-400 text-6xl">📦</div>
             </div>
           )}
         </Link>

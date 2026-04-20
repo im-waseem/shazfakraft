@@ -1,4 +1,3 @@
-
 'use client'
 import { useEffect, useState, use } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -125,80 +124,76 @@ export default function ProductDetailPage({ params }: Props) {
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Product Images */}
-          <div className="relative">
-            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 relative">
-              {product.main_image_url ? (
-                <Image
-                  src={selectedImage === 0 ? product.main_image_url : (product.images?.[selectedImage - 1] || product.main_image_url)}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-gray-200">
-                  <span className="text-gray-400 text-6xl">📦</span>
-                </div>
-              )}
-              
-              {/* Slider Navigation Buttons */}
-              {(product.images?.length > 0 || product.main_image_url) && (
-                <>
-                  <button
-                    onClick={() => setSelectedImage(prev => Math.max(0, prev - 1))}
-                    disabled={selectedImage === 0}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white shadow-md flex items-center justify-center disabled:opacity-30 transition-opacity"
-                  >
-                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setSelectedImage(prev => Math.min(product.images?.length || 0, prev + 1))}
-                    disabled={selectedImage >= (product.images?.length || 0)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white shadow-md flex items-center justify-center disabled:opacity-30 transition-opacity"
-                  >
-                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
+        <div className="relative">
+          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 relative">
+{product.main_image_url || product.images?.[0] ? (
+  <Image
+    src={selectedImage === 0 ? product.main_image_url : (product.images?.[selectedImage - 1] || product.main_image_url)}
+    alt={product.name}
+    fill
+    className="object-cover"
+  />
+) : (
+  <div className="flex h-full items-center justify-center bg-gray-200">
+    <span className="text-gray-400 text-6xl">📦</span>
+  </div>
+)}
+            
+            {/* Slider Navigation Buttons */}
+            {(product.images?.length > 0 || product.main_image_url) && (
+              <>
+                <button
+                  onClick={() => setSelectedImage(prev => Math.max(0, prev - 1))}
+                  disabled={selectedImage === 0}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white shadow-md flex items-center justify-center disabled:opacity-30 transition-opacity"
+                >
+                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setSelectedImage(prev => Math.min(product.images?.length || 0, prev + 1))}
+                  disabled={selectedImage >= (product.images?.length || 0)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white shadow-md flex items-center justify-center disabled:opacity-30 transition-opacity"
+                >
+                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Gallery Thumbnails */}
           <div className="flex gap-3 overflow-x-auto pb-2">
-            <button
-              onClick={() => setSelectedImage(0)}
-              className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 ${selectedImage === 0 ? 'border-indigo-600' : 'border-transparent'}`}
-            >
-              {product.main_image_url ? (
-                <Image
-                  src={product.main_image_url}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-gray-200">
-                  <span className="text-gray-400">📦</span>
-                </div>
-              )}
-            </button>
+{product.main_image_url || product.images?.[0] ? (
+  <button
+    onClick={() => setSelectedImage(0)}
+    className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 ${selectedImage === 0 ? 'border-indigo-600' : 'border-transparent'}`}
+  >
+    <Image
+      src={product.main_image_url || product.images?.[0]}
+      alt={`${product.name} 1`}
+      fill
+      className="object-cover"
+    />
+  </button>
+) : null}
 
-            {product.images?.filter(img => img).map((image, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedImage(index + 1)}
-                className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 ${selectedImage === index + 1 ? 'border-indigo-600' : 'border-transparent'}`}
-              >
-                <Image
-                  src={image}
-                  alt={`${product.name} ${index + 1}`}
-                  fill
-                  className="object-cover"
-                />
-              </button>
-            ))}
+{product.images?.filter(img => img).map((image, index) => (
+  <button
+    key={index}
+    onClick={() => setSelectedImage(index + 1)}
+    className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 ${selectedImage === index + 1 ? 'border-indigo-600' : 'border-transparent'}`}
+  >
+    <Image
+      src={image}
+      alt={`${product.name} ${index + 2}`}
+      fill
+      className="object-cover"
+    />
+  </button>
+))}
           </div>
         </div>
 
