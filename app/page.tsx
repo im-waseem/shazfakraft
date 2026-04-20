@@ -519,8 +519,8 @@ export default function Home() {
             <div>
               <p style={{ fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text)', marginBottom: 16 }}>Contact</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>support@shafa.com</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>+1 (555) 123-4567</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>shazfakraft@gmail.com</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>916361236653</span>
               </div>
             </div>
           </div>

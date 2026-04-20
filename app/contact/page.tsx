@@ -1,233 +1,638 @@
-'use client'
+"use client";
 
-import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from "react";
 
-export default function Contact() {
-  const [loading, setLoading] = useState(true)
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
-  })
-  const [message, setMessage] = useState('')
+const contactInfo = [
+  {
+    icon: "◉",
+    label: "Address",
+    value: "Bangalore, Karnataka, India",
+    sub: "Open for walk-ins by appointment",
+  },
+  {
+    icon: "◎",
+    label: "Email",
+    value: "shazfakraft@gmail.com",
+    sub: "We reply within 24 hours",
+  },
+  {
+    icon: "◍",
+    label: "WhatsApp",
+    value: "+916361236653",
+    sub: "9am – 9pm, Mon – Sat",
+  },
+];
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
+const faqs = [
+  {
+    q: "Do you ship across India?",
+    a: "Yes, we ship pan-India. Most orders arrive within 3–5 business days.",
+  },
+  {
+    q: "Are your products Shariah-compliant?",
+    a: "Every product is reviewed before listing. We source from trusted suppliers only.",
+  },
+  {
+    q: "How do I track my order?",
+    a: "Once shipped, you'll receive an SMS and email with tracking details.",
+  },
+  {
+    q: "What is your return policy?",
+    a: "We accept returns within 7 days for damaged or incorrect items.",
+  },
+];
+
+export default function ContactPage() {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setMessage('Sending message...')
-    try {
-      // Here you would typically send the message to your backend
-      setMessage('Message sent successfully! We will get back to you soon.')
-      setFormData({ name: '', email: '', subject: '', message: '' })
-    } catch (error) {
-      setMessage('Failed to send message. Please try again.')
-    }
-  }
-
-  useEffect(() => {
-    async function loadData() {
-      setLoading(false)
-    }
-    loadData()
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    )
-  }
+    e.preventDefault();
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    setLoading(false);
+    setSubmitted(true);
+  };
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <span className="text-2xl font-bold text-indigo-600">Shafa</span>
-              <span className="ml-2 text-xl font-semibold text-gray-900">eCommerce</span>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/cart" className="relative p-2 text-gray-600 hover:text-indigo-600 transition-colors">
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  0
-                </span>
-              </Link>
-              <Link href="/login" className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors">
-                Sign In
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+    <main
+      style={{
+        fontFamily: "'Georgia', serif",
+        background: "#faf9f6",
+        minHeight: "100vh",
+        color: "#1a1714",
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap');
 
-      <main className="flex-1">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Contact Us</h1>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
-                <div className="grid grid-cols-1 gap-6">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                      Subject
-                    </label>
-                    <input
-                      type="text"
-                      id="subject"
-                      name="subject"
-                      value={formData.subject}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                      Message
-                    </label>
-                    <textarea
-                      id="message"
-                      name="message"
-                      value={formData.message}
-                      onChange={handleChange}
-                      required
-                      rows={5}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="submit"
-                      className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors"
-                    >
-                      Send Message
-                    </button>
-                  </div>
-                  {message && (
-                    <div className={`text-sm ${message.includes('successfully') ? 'text-green-600' : 'text-red-600'}`}>
-                      {message}
-                    </div>
-                  )}
-                </div>
-              </form>
+        .contact-input {
+          width: 100%;
+          padding: 0.85rem 1rem;
+          border: 1px solid #ddd9d2;
+          background: #fff;
+          font-family: 'Lato', sans-serif;
+          font-size: 0.9rem;
+          color: #1a1714;
+          outline: none;
+          transition: border-color 0.2s, box-shadow 0.2s;
+          box-sizing: border-box;
+          border-radius: 0;
+          appearance: none;
+        }
+        .contact-input:focus {
+          border-color: #b5965a;
+          box-shadow: 0 0 0 3px rgba(181,150,90,0.12);
+        }
+
+        .contact-btn {
+          background: #1a1714;
+          color: #faf9f6;
+          border: none;
+          padding: 1rem 2.5rem;
+          font-family: 'Lato', sans-serif;
+          font-size: 0.8rem;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: background 0.2s, transform 0.15s;
+          width: 100%;
+        }
+        .contact-btn:hover {
+          background: #b5965a;
+        }
+        .contact-btn:active {
+          transform: scale(0.98);
+        }
+        .contact-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .info-card {
+          padding: 1.75rem;
+          background: #fff;
+          border: 1px solid #e0ddd7;
+          transition: border-color 0.2s;
+        }
+        .info-card:hover {
+          border-color: #b5965a;
+        }
+
+        .faq-item {
+          border-bottom: 1px solid #e0ddd7;
+        }
+        .faq-btn {
+          width: 100%;
+          text-align: left;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 1.25rem 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-family: 'Playfair Display', serif;
+          font-size: 1rem;
+          color: #1a1714;
+        }
+        .faq-btn:hover {
+          color: #b5965a;
+        }
+        .faq-answer {
+          font-family: 'Lato', sans-serif;
+          font-size: 0.9rem;
+          line-height: 1.8;
+          color: #666;
+          font-weight: 300;
+          overflow: hidden;
+          transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        .faq-answer.open {
+          padding-bottom: 1.25rem;
+        }
+
+        .gold-bar {
+          width: 48px;
+          height: 2px;
+          background: #b5965a;
+          margin-bottom: 1.5rem;
+        }
+      `}</style>
+
+      {/* ── HERO ─────────────────────────────────────── */}
+      <section
+        style={{
+          background: "#1a1714",
+          padding: "7rem 2rem 5rem",
+          textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "radial-gradient(ellipse at 50% 100%, rgba(181,150,90,0.15) 0%, transparent 60%)",
+          }}
+        />
+        <div style={{ position: "relative", maxWidth: 640, margin: "0 auto" }}>
+          <p
+            style={{
+              fontFamily: "'Lato', sans-serif",
+              letterSpacing: "0.22em",
+              fontSize: "0.68rem",
+              color: "#b5965a",
+              textTransform: "uppercase",
+              marginBottom: "1.25rem",
+            }}
+          >
+            Get In Touch
+          </p>
+          <h1
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: "clamp(2.4rem, 5vw, 4rem)",
+              fontWeight: 600,
+              color: "#faf9f6",
+              lineHeight: 1.15,
+              marginBottom: "1.25rem",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            We&apos;d Love to{" "}
+            <em style={{ fontStyle: "italic", color: "#b5965a" }}>Hear</em>
+            <br />
+            From You
+          </h1>
+          <p
+            style={{
+              fontFamily: "'Lato', sans-serif",
+              fontSize: "1rem",
+              fontWeight: 300,
+              color: "#a09990",
+              lineHeight: 1.8,
+            }}
+          >
+            Questions, feedback, or just saying salaam — our team is here and
+            ready to help.
+          </p>
+        </div>
+      </section>
+
+      {/* ── CONTACT CARDS ─────────────────────────────── */}
+      <section style={{ padding: "5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: "1.5rem",
+            marginBottom: "5rem",
+          }}
+        >
+          {contactInfo.map((c) => (
+            <div key={c.label} className="info-card">
+              <span
+                style={{
+                  fontSize: "1.4rem",
+                  color: "#b5965a",
+                  display: "block",
+                  marginBottom: "1rem",
+                }}
+              >
+                {c.icon}
+              </span>
+              <p
+                style={{
+                  fontFamily: "'Lato', sans-serif",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#999",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                {c.label}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: "1.05rem",
+                  fontWeight: 600,
+                  marginBottom: "0.35rem",
+                  color: "#1a1714",
+                }}
+              >
+                {c.value}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'Lato', sans-serif",
+                  fontSize: "0.8rem",
+                  fontWeight: 300,
+                  color: "#999",
+                  margin: 0,
+                }}
+              >
+                {c.sub}
+              </p>
             </div>
-            <div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
-                <div className="space-y-4">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Email</p>
-                      <p className="text-sm text-gray-600">support@shafa.com</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Phone</p>
-                      <p className="text-sm text-gray-600">+1 (555) 123-4567</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">Address</p>
-                      <p className="text-sm text-gray-600">123 Shopping St, Commerce City, ST 12345</p>
-                    </div>
-                  </div>
-                </div>
+          ))}
+        </div>
+
+        {/* ── FORM + FAQ GRID ─────────────────────────── */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.1fr 0.9fr",
+            gap: "4rem",
+            alignItems: "start",
+          }}
+        >
+          {/* FORM */}
+          <div>
+            <div className="gold-bar" />
+            <h2
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: "1.9rem",
+                fontWeight: 600,
+                marginBottom: "2rem",
+              }}
+            >
+              Send Us a Message
+            </h2>
+
+            {submitted ? (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #b5965a",
+                  padding: "3rem",
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: "2rem",
+                    marginBottom: "1rem",
+                    color: "#b5965a",
+                  }}
+                >
+                  ✓
+                </p>
+                <p
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: "1.3rem",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Message received!
+                </p>
+                <p
+                  style={{
+                    fontFamily: "'Lato', sans-serif",
+                    fontSize: "0.9rem",
+                    fontWeight: 300,
+                    color: "#888",
+                  }}
+                >
+                  JazakAllah khair. We&apos;ll get back to you within 24 hours.
+                </p>
+                <button
+                  onClick={() => {
+                    setSubmitted(false);
+                    setForm({ name: "", email: "", subject: "", message: "" });
+                  }}
+                  style={{
+                    marginTop: "1.5rem",
+                    fontFamily: "'Lato', sans-serif",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    background: "none",
+                    border: "1px solid #1a1714",
+                    padding: "0.6rem 1.5rem",
+                    cursor: "pointer",
+                    color: "#1a1714",
+                    transition: "background 0.2s, color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLButtonElement).style.background =
+                      "#1a1714";
+                    (e.target as HTMLButtonElement).style.color = "#faf9f6";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLButtonElement).style.background = "none";
+                    (e.target as HTMLButtonElement).style.color = "#1a1714";
+                  }}
+                >
+                  Send another
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      </main>
+            ) : (
+              <form onSubmit={handleSubmit} style={{ display: "grid", gap: "1rem" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "1rem",
+                  }}
+                >
+                  <div>
+                    <label
+                      style={{
+                        fontFamily: "'Lato', sans-serif",
+                        fontSize: "0.7rem",
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        color: "#999",
+                        display: "block",
+                        marginBottom: "0.4rem",
+                      }}
+                    >
+                      Full Name *
+                    </label>
+                    <input
+                      className="contact-input"
+                      name="name"
+                      value={form.name}
+                      onChange={handleChange}
+                      required
+                      placeholder="Your name"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontFamily: "'Lato', sans-serif",
+                        fontSize: "0.7rem",
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        color: "#999",
+                        display: "block",
+                        marginBottom: "0.4rem",
+                      }}
+                    >
+                      Email *
+                    </label>
+                    <input
+                      className="contact-input"
+                      name="email"
+                      type="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      required
+                      placeholder="you@email.com"
+                    />
+                  </div>
+                </div>
 
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Shafa eCommerce</h3>
-              <p className="text-sm text-gray-400">Your one-stop shop for quality products.</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-white mb-4">Quick Links</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link href="/" className="hover:text-white">Home</Link></li>
-                <li><Link href="/about" className="hover:text-white">About Us</Link></li>
-                <li><Link href="/contact" className="hover:text-white">Contact</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-white mb-4">Customer Service</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link href="/orders" className="hover:text-white">My Orders</Link></li>
-                <li><Link href="/profile" className="hover:text-white">My Account</Link></li>
-                <li>Email: support@shafa.com</li>
-                <li>Phone: +1 (555) 123-4567</li>
-              </ul>
-            </div>
+                <div>
+                  <label
+                    style={{
+                      fontFamily: "'Lato', sans-serif",
+                      fontSize: "0.7rem",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      color: "#999",
+                      display: "block",
+                      marginBottom: "0.4rem",
+                    }}
+                  >
+                    Subject
+                  </label>
+                  <select
+                    className="contact-input"
+                    name="subject"
+                    value={form.subject}
+                    onChange={handleChange}
+                    style={{
+                      width: "100%",
+                      padding: "0.85rem 1rem",
+                      border: "1px solid #ddd9d2",
+                      background: "#fff",
+                      fontFamily: "'Lato', sans-serif",
+                      fontSize: "0.9rem",
+                      color: form.subject ? "#1a1714" : "#aaa",
+                      outline: "none",
+                      borderRadius: 0,
+                      appearance: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">Select a topic…</option>
+                    <option value="order">Order inquiry</option>
+                    <option value="product">Product question</option>
+                    <option value="return">Returns &amp; refunds</option>
+                    <option value="wholesale">Wholesale / bulk</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontFamily: "'Lato', sans-serif",
+                      fontSize: "0.7rem",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      color: "#999",
+                      display: "block",
+                      marginBottom: "0.4rem",
+                    }}
+                  >
+                    Message *
+                  </label>
+                  <textarea
+                    className="contact-input"
+                    name="message"
+                    value={form.message}
+                    onChange={handleChange}
+                    required
+                    rows={5}
+                    placeholder="How can we help you?"
+                    style={{ resize: "vertical" }}
+                  />
+                </div>
+
+                <button className="contact-btn" type="submit" disabled={loading}>
+                  {loading ? "Sending…" : "Send Message →"}
+                </button>
+              </form>
+            )}
           </div>
-          <div className="mt-8 pt-8 border-t border-gray-800 text-center text-sm text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Shafa eCommerce. All rights reserved.</p>
+
+          {/* FAQ */}
+          <div>
+            <div className="gold-bar" />
+            <h2
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: "1.9rem",
+                fontWeight: 600,
+                marginBottom: "2rem",
+              }}
+            >
+              Frequently Asked
+            </h2>
+            <div>
+              {faqs.map((faq, i) => (
+                <div key={i} className="faq-item">
+                  <button
+                    className="faq-btn"
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    aria-expanded={openFaq === i}
+                  >
+                    <span>{faq.q}</span>
+                    <span
+                      style={{
+                        color: "#b5965a",
+                        fontSize: "1.2rem",
+                        lineHeight: 1,
+                        transform:
+                          openFaq === i ? "rotate(45deg)" : "rotate(0deg)",
+                        transition: "transform 0.25s",
+                        display: "inline-block",
+                        flexShrink: 0,
+                        marginLeft: "1rem",
+                      }}
+                    >
+                      +
+                    </span>
+                  </button>
+                  <div
+                    className={`faq-answer ${openFaq === i ? "open" : ""}`}
+                    style={{
+                      maxHeight: openFaq === i ? "200px" : "0",
+                    }}
+                  >
+                    {faq.a}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Map placeholder */}
+            <div
+              style={{
+                marginTop: "3rem",
+                background: "#1a1714",
+                padding: "2.5rem",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage:
+                    "radial-gradient(circle at 80% 20%, rgba(181,150,90,0.15) 0%, transparent 50%)",
+                }}
+              />
+              <p
+                style={{
+                  fontFamily: "'Lato', sans-serif",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.22em",
+                  textTransform: "uppercase",
+                  color: "#b5965a",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                Based In
+              </p>
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: "1.5rem",
+                  color: "#faf9f6",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Bangalore, India
+              </p>
+              <p
+                style={{
+                  fontFamily: "'Lato', sans-serif",
+                  fontSize: "0.85rem",
+                  fontWeight: 300,
+                  color: "#888",
+                  lineHeight: 1.7,
+                  margin: 0,
+                }}
+              >
+                Serving 
+                <br />
+                across India since 2025.
+              </p>
+            </div>
           </div>
         </div>
-      </footer>
-    </div>
-  )
+      </section>
+    </main>
+  );
 }

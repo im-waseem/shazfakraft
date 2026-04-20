@@ -1,124 +1,516 @@
-'use client'
+"use client";
 
-import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from "react";
 
-export default function About() {
-  const [loading, setLoading] = useState(true)
+const stats = [
+  { value: "100+", label: "Happy Customers" },
+  { value: "120+", label: "Products Listed" },
+  { value: "4.9★", label: "Average Rating" },
+  { value: "48h", label: "Avg. Delivery" },
+];
+
+const values = [
+  {
+    icon: "✦",
+    title: "Authentic Quality",
+    desc: "Every product is handpicked and verified — from Islamic books to prayer essentials, we carry only what we trust ourselves.",
+  },
+  {
+    icon: "◈",
+    title: "Community First",
+    desc: "Shazfa Kraftwas built by and for the Muslim community. Our roots are local, our vision is global.",
+  },
+  {
+    icon: "⬡",
+    title: "Ethical Commerce",
+    desc: "We practice what we preach — fair pricing, halal sourcing, and honest dealings in every transaction.",
+  },
+  {
+    icon: "◇",
+    title: "Seamless Experience",
+    desc: "From browsing to doorstep delivery, we make shopping for your deen as effortless as possible.",
+  },
+];
+
+export default function AboutPage() {
+  const [visible, setVisible] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(false)
-    }
-    loadData()
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    )
-  }
+    const timer = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <span className="text-2xl font-bold text-indigo-600">Shafa</span>
-              <span className="ml-2 text-xl font-semibold text-gray-900">eCommerce</span>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/cart" className="relative p-2 text-gray-600 hover:text-indigo-600 transition-colors">
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  0
+    <main
+      style={{
+        fontFamily: "'Georgia', 'Times New Roman', serif",
+        background: "#faf9f6",
+        minHeight: "100vh",
+        color: "#1a1714",
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Lato:wght@300;400;700&display=swap');
+
+        .about-hero-text {
+          font-family: 'Playfair Display', Georgia, serif;
+          opacity: 0;
+          transform: translateY(32px);
+          transition: opacity 0.9s ease, transform 0.9s ease;
+        }
+        .about-hero-text.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .about-hero-text.delay-1 { transition-delay: 0.15s; }
+        .about-hero-text.delay-2 { transition-delay: 0.30s; }
+        .about-hero-text.delay-3 { transition-delay: 0.45s; }
+
+        .stat-card {
+          border: 1px solid #e0ddd7;
+          padding: 2rem 1.5rem;
+          background: #fff;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .stat-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: #b5965a;
+        }
+        .stat-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+        }
+
+        .value-card {
+          padding: 2rem;
+          border: 1px solid #e0ddd7;
+          background: #fff;
+          transition: all 0.25s ease;
+        }
+        .value-card:hover {
+          background: #1a1714;
+          color: #faf9f6;
+          border-color: #1a1714;
+        }
+        .value-card:hover .value-icon {
+          color: #b5965a;
+        }
+        .value-card:hover .value-desc {
+          color: #c8c4bb;
+        }
+
+        .divider-line {
+          width: 64px;
+          height: 2px;
+          background: #b5965a;
+          margin: 1.25rem 0;
+        }
+
+        .team-img-wrap {
+          overflow: hidden;
+          position: relative;
+        }
+        .team-img-wrap::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border: 2px solid #b5965a;
+          transform: translate(8px, 8px);
+          pointer-events: none;
+        }
+      `}</style>
+
+      {/* ── HERO ─────────────────────────────────────── */}
+      <section
+        ref={heroRef}
+        style={{
+          position: "relative",
+          background: "#1a1714",
+          color: "#faf9f6",
+          padding: "8rem 2rem 6rem",
+          overflow: "hidden",
+        }}
+      >
+        {/* Background pattern */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "radial-gradient(circle at 20% 50%, rgba(181,150,90,0.12) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(181,150,90,0.08) 0%, transparent 40%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "relative",
+            maxWidth: 800,
+            margin: "0 auto",
+            textAlign: "center",
+          }}
+        >
+          <p
+            className={`about-hero-text ${visible ? "visible" : ""}`}
+            style={{
+              fontFamily: "'Lato', sans-serif",
+              letterSpacing: "0.22em",
+              fontSize: "0.7rem",
+              color: "#b5965a",
+              textTransform: "uppercase",
+              marginBottom: "1.5rem",
+            }}
+          >
+            Our Story
+          </p>
+          <h1
+            className={`about-hero-text delay-1 ${visible ? "visible" : ""}`}
+            style={{
+              fontSize: "clamp(2.6rem, 6vw, 4.5rem)",
+              fontWeight: 600,
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              marginBottom: "1.75rem",
+            }}
+          >
+            Rooted in Faith.
+            <br />
+            <em style={{ fontStyle: "italic", color: "#b5965a" }}>
+              Driven by Purpose.
+            </em>
+          </h1>
+          <p
+            className={`about-hero-text delay-2 ${visible ? "visible" : ""}`}
+            style={{
+              fontFamily: "'Lato', sans-serif",
+              fontSize: "1.1rem",
+              fontWeight: 300,
+              color: "#c8c4bb",
+              lineHeight: 1.8,
+              maxWidth: 560,
+              margin: "0 auto",
+            }}
+          >
+            Shazfa Kraftwas founded with a single belief — that every Muslim deserves
+            access to quality, authentic products that enrich their daily
+            worship and lifestyle.
+          </p>
+        </div>
+      </section>
+
+      {/* ── STATS ─────────────────────────────────────── */}
+      <section
+        style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+          padding: "5rem 2rem",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "1px",
+            background: "#e0ddd7",
+            border: "1px solid #e0ddd7",
+          }}
+        >
+          {stats.map((s) => (
+            <div key={s.label} className="stat-card" style={{ margin: 0 }}>
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: "2.8rem",
+                  fontWeight: 700,
+                  color: "#1a1714",
+                  margin: 0,
+                  lineHeight: 1,
+                }}
+              >
+                {s.value}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'Lato', sans-serif",
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#888",
+                  marginTop: "0.5rem",
+                  marginBottom: 0,
+                }}
+              >
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── MISSION ─────────────────────────────────────── */}
+      <section
+        style={{
+          background: "#fff",
+          padding: "6rem 2rem",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "5rem",
+            alignItems: "center",
+          }}
+        >
+          {/* Text */}
+          <div>
+            <p
+              style={{
+                fontFamily: "'Lato', sans-serif",
+                letterSpacing: "0.2em",
+                fontSize: "0.68rem",
+                color: "#b5965a",
+                textTransform: "uppercase",
+                marginBottom: "1rem",
+              }}
+            >
+              Our Mission
+            </p>
+            <div className="divider-line" />
+            <h2
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: "clamp(1.8rem, 3vw, 2.8rem)",
+                fontWeight: 600,
+                lineHeight: 1.2,
+                marginBottom: "1.5rem",
+                marginTop: "1.5rem",
+              }}
+            >
+              A marketplace built on Taqwa and trust.
+            </h2>
+            <p
+              style={{
+                fontFamily: "'Lato', sans-serif",
+                fontSize: "1rem",
+                fontWeight: 300,
+                lineHeight: 1.9,
+                color: "#555",
+                marginBottom: "1.25rem",
+              }}
+            >
+              We started Shazfa Kraftfrom a small warehouse in Bangalore, inspired by
+              a simple gap — finding high-quality Islamic products without
+              compromise. Today we serve thousands of families across India.
+            </p>
+            <p
+              style={{
+                fontFamily: "'Lato', sans-serif",
+                fontSize: "1rem",
+                fontWeight: 300,
+                lineHeight: 1.9,
+                color: "#555",
+              }}
+            >
+              Every product on our platform is reviewed for authenticity,
+              quality, and Shariah compliance. We do not list what we would not
+              use ourselves.
+            </p>
+          </div>
+
+          {/* Visual block */}
+          <div style={{ position: "relative" }}>
+            <div
+              style={{
+                background: "#1a1714",
+                padding: "3rem",
+                color: "#faf9f6",
+                position: "relative",
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  top: "1.5rem",
+                  right: "1.5rem",
+                  width: 60,
+                  height: 60,
+                  border: "1px solid rgba(181,150,90,0.4)",
+                  borderRadius: "50%",
+                }}
+              />
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: "1.5rem",
+                  fontStyle: "italic",
+                  lineHeight: 1.6,
+                  color: "#e8e4dc",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                &ldquo;We wanted to build something that our community could
+                rely on — not just for products, but for values.&rdquo;
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    background: "#b5965a",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: "'Playfair Display', serif",
+                    fontWeight: 700,
+                    color: "#fff",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  SS
+                </div>
+                <div>
+                  <p
+                    style={{
+                      fontFamily: "'Lato', sans-serif",
+                      fontWeight: 700,
+                      fontSize: "0.85rem",
+                      color: "#fff",
+                      margin: 0,
+                    }}
+                  >
+                    Syed Shaiz
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: "'Lato', sans-serif",
+                      fontWeight: 300,
+                      fontSize: "0.75rem",
+                      color: "#b5965a",
+                      margin: 0,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Founder, Syed Shaiz
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                bottom: "-12px",
+                right: "-12px",
+                width: "100%",
+                height: "100%",
+                border: "1px solid #b5965a",
+                zIndex: -1,
+              }}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── VALUES ─────────────────────────────────────── */}
+      <section
+        style={{
+          background: "#faf9f6",
+          padding: "6rem 2rem",
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+            <p
+              style={{
+                fontFamily: "'Lato', sans-serif",
+                letterSpacing: "0.2em",
+                fontSize: "0.68rem",
+                color: "#b5965a",
+                textTransform: "uppercase",
+                marginBottom: "1rem",
+              }}
+            >
+              What We Stand For
+            </p>
+            <h2
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
+                fontWeight: 600,
+              }}
+            >
+              Our Core Values
+            </h2>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "1.5rem",
+            }}
+          >
+            {values.map((v) => (
+              <div key={v.title} className="value-card">
+                <span
+                  className="value-icon"
+                  style={{
+                    fontSize: "1.6rem",
+                    color: "#b5965a",
+                    display: "block",
+                    marginBottom: "1rem",
+                    transition: "color 0.25s",
+                  }}
+                >
+                  {v.icon}
                 </span>
-              </Link>
-              <Link href="/login" className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors">
-                Sign In
-              </Link>
-            </div>
+                <h3
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: "1.15rem",
+                    fontWeight: 600,
+                    marginBottom: "0.75rem",
+                    transition: "color 0.25s",
+                  }}
+                >
+                  {v.title}
+                </h3>
+                <p
+                  className="value-desc"
+                  style={{
+                    fontFamily: "'Lato', sans-serif",
+                    fontSize: "0.9rem",
+                    fontWeight: 300,
+                    lineHeight: 1.8,
+                    color: "#666",
+                    margin: 0,
+                    transition: "color 0.25s",
+                  }}
+                >
+                  {v.desc}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
-      </header>
-
-      <main className="flex-1">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">About Us</h1>
-          <div className="max-w-3xl mx-auto text-gray-600 leading-relaxed">
-            <p className="mb-6">
-              Welcome to Shafa eCommerce, your one-stop destination for quality products. 
-              We are committed to providing our customers with the best shopping experience 
-              through our wide range of products and excellent customer service.
-            </p>
-            <p className="mb-6">
-              Founded with a vision to make online shopping convenient and enjoyable, 
-              we have grown to become a trusted name in the eCommerce industry.
-            </p>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 mt-8">Our Mission</h2>
-            <p className="mb-6">
-              To provide high-quality products at competitive prices while ensuring 
-              customer satisfaction through exceptional service and support.
-            </p>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 mt-8">Why Choose Us?</h2>
-            <ul className="space-y-2 mb-6">
-              <li className="flex items-start">
-                <span className="text-indigo-600 mr-2 mt-0.5">&#x2713;</span>
-                <span>Wide range of quality products</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-indigo-600 mr-2 mt-0.5">&#x2713;</span>
-                <span>Competitive prices</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-indigo-600 mr-2 mt-0.5">&#x2713;</span>
-                <span>Excellent customer service</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-indigo-600 mr-2 mt-0.5">&#x2713;</span>
-                <span>Secure and convenient shopping</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </main>
-
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Shafa eCommerce</h3>
-              <p className="text-sm text-gray-400">Your one-stop shop for quality products.</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-white mb-4">Quick Links</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link href="/" className="hover:text-white">Home</Link></li>
-                <li><Link href="/about" className="hover:text-white">About Us</Link></li>
-                <li><Link href="/contact" className="hover:text-white">Contact</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-white mb-4">Customer Service</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link href="/orders" className="hover:text-white">My Orders</Link></li>
-                <li><Link href="/profile" className="hover:text-white">My Account</Link></li>
-                <li>Email: support@shafa.com</li>
-                <li>Phone: +1 (555) 123-4567</li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t border-gray-800 text-center text-sm text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Shafa eCommerce. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
-    </div>
-  )
+      </section>
+    </main>
+  );
 }
