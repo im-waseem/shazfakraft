@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 
 export async function getOrders() {
-  const supabase = createClient()
+  const supabase = await createClient() // ✅ FIX HERE
 
   const { data, error } = await supabase
     .from('orders')
