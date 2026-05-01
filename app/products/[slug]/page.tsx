@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState, use, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface Product {
   id: string
@@ -59,7 +60,6 @@ function parseOptions(variants: Variant[]): Record<string, string[]> {
   return Object.fromEntries(Object.entries(map).map(([k, s]) => [k, Array.from(s)]))
 }
 
-// Check if a given selection combo is available / has stock
 function isComboAvailable(variants: Variant[], selected: Record<string, string>, optionKey: string, optionVal: string) {
   const check = { ...selected, [optionKey]: optionVal }
   return variants.some(v =>
@@ -71,6 +71,7 @@ function isComboAvailable(variants: Variant[], selected: Record<string, string>,
 
 export default function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
+  const router = useRouter()
 
   const [product, setProduct]             = useState<Product | null>(null)
   const [variants, setVariants]           = useState<Variant[]>([])
@@ -79,8 +80,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [quantity, setQuantity]           = useState(1)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [addedToCart, setAddedToCart]     = useState(false)
-  const [activeTab, setActiveTab]         = useState<'description' | 'shipping' | 'reviews'>('description')
   const [isWishlisted, setIsWishlisted]   = useState(false)
+  const [activeTab, setActiveTab]         = useState<'description' | 'shipping' | 'reviews'>('description')
+  const [imgZoom, setImgZoom]             = useState(false)
+  const [zoomPos, setZoomPos]             = useState({ x: 50, y: 50 })
 
   const fetchProduct = useCallback(async () => {
     const supabase = createClient()
@@ -109,8 +112,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .order('position')
       const vList: Variant[] = vData || []
       setVariants(vList)
-
-      // Auto-select first available option per key
       if (vList.length > 0) {
         const opts = parseOptions(vList)
         const auto: Record<string, string> = {}
@@ -123,7 +124,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   useEffect(() => { fetchProduct() }, [fetchProduct])
 
-  /* ── Derived state ── */
   const allImages = product ? [
     ...(product.main_image_url ? [product.main_image_url] : []),
     ...(product.images?.filter(Boolean) || []),
@@ -132,7 +132,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const parsedOptions = parseOptions(variants)
   const optionKeys    = product?.option_keys?.filter(k => parsedOptions[k]) || Object.keys(parsedOptions)
 
-  // Find matching variant for current selection
   const selectedVariant = variants.find(v =>
     Object.entries(selectedOptions).every(([k, val]) => v.options[k] === val)
   ) ?? null
@@ -144,7 +143,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const stock          = selectedVariant?.inventory_quantity ?? product?.inventory_quantity ?? 0
   const allSelected    = optionKeys.length > 0 && optionKeys.every(k => selectedOptions[k])
 
-  /* ── Cart ── */
   const handleAddToCart = () => {
     if (!product || !allSelected) return
     const cart = JSON.parse(localStorage.getItem('cart') || '[]')
@@ -172,432 +170,984 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     setTimeout(() => setAddedToCart(false), 2800)
   }
 
-  /* ── Loading ── */
-  if (loading) {
-    return (
-      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0c0e14' }}>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid rgba(108,99,255,0.2)', borderTopColor: '#6c63ff', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
-          <p style={{ color: 'rgba(232,234,242,0.35)', fontSize: 13, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Loading product…</p>
-        </div>
-      </div>
-    )
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    setZoomPos({ x, y })
   }
 
-  if (!product) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0c0e14', fontFamily: 'Plus Jakarta Sans, sans-serif', gap: 12 }}>
-        <p style={{ fontSize: 52 }}>📦</p>
-        <h1 style={{ color: '#e8eaf2', fontSize: 22, fontWeight: 700 }}>Product not found</h1>
-        <p style={{ color: 'rgba(232,234,242,0.4)', fontSize: 14 }}>This product doesn't exist or has been removed.</p>
-        <Link href="/products" style={{ marginTop: 8, background: '#6c63ff', color: 'white', padding: '10px 24px', borderRadius: 10, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>Browse Products</Link>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#f6f6f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: 44, height: 44, border: '3px solid #e8e8e8', borderTopColor: '#c8860a', borderRadius: '50%', animation: 'spin 0.75s linear infinite', margin: '0 auto 14px' }} />
+        <p style={{ color: '#888', fontSize: 14, fontFamily: 'sans-serif' }}>Loading…</p>
       </div>
-    )
-  }
+    </div>
+  )
+
+  if (!product) return (
+    <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f6f6f6', fontFamily: 'sans-serif', gap: 12 }}>
+      <p style={{ fontSize: 48 }}>📦</p>
+      <h1 style={{ fontSize: 20, fontWeight: 700 }}>Product not found</h1>
+      <Link href="/" style={{ background: '#c8860a', color: 'white', padding: '10px 24px', borderRadius: 6, textDecoration: 'none', fontWeight: 600 }}>Back to Home</Link>
+    </div>
+  )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0c0e14', fontFamily: "'Plus Jakarta Sans', sans-serif", color: '#e8eaf2' }}>
+    <div style={{ minHeight: '100vh', background: '#f6f6f6', fontFamily: "'Amazon Ember', 'Segoe UI', Arial, sans-serif", color: '#0f1111' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap');
-        @keyframes spin    { to   { transform: rotate(360deg); } }
-        @keyframes fadeUp  { from { opacity:0;transform:translateY(10px); } to { opacity:1;transform:translateY(0); } }
-        @keyframes pop     { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
-        @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;1,400&display=swap');
 
-        .thumb { border:2px solid transparent; border-radius:10px; overflow:hidden; cursor:pointer; background:#1a1d28; padding:0; transition:border-color 0.18s; flex-shrink:0; }
-        .thumb:hover { border-color:rgba(108,99,255,0.45); }
-        .thumb.active { border-color:#6c63ff; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .opt-chip { padding:9px 16px; border-radius:9px; font-size:13px; font-weight:600; border:1.5px solid rgba(255,255,255,0.1); background:#1a1d28; color:rgba(232,234,242,0.55); cursor:pointer; transition:all 0.18s; display:inline-flex; align-items:center; gap:6px; position:relative; }
-        .opt-chip:hover:not(:disabled) { border-color:rgba(108,99,255,0.5); color:#e8eaf2; }
-        .opt-chip.selected { background:rgba(108,99,255,0.14); border-color:#6c63ff; color:#a78bfa; }
-        .opt-chip.unavailable { opacity:0.3; cursor:not-allowed; }
-        .opt-chip.unavailable::after { content:''; position:absolute; left:4px; right:4px; top:50%; height:1px; background:rgba(248,113,113,0.5); transform:rotate(-10deg); }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        @keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn   { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        @keyframes checkPop { 0%{transform:scale(0)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
 
-        .color-swatch { width:32px; height:32px; border-radius:50%; cursor:pointer; border:2.5px solid transparent; transition:all 0.18s; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.2); flex-shrink:0; }
-        .color-swatch:hover { transform:scale(1.12); }
-        .color-swatch.selected { border-color:#6c63ff; box-shadow:0 0 0 3px rgba(108,99,255,0.3),inset 0 0 0 1px rgba(255,255,255,0.2); }
-        .color-swatch.unavailable { opacity:0.25; cursor:not-allowed; filter:grayscale(1); }
+        .page-enter { animation: fadeIn 0.4s ease both; }
 
-        .qty-btn { width:36px; height:36px; border-radius:8px; background:#1a1d28; border:1.5px solid rgba(255,255,255,0.1); color:#e8eaf2; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; font-weight:300; }
-        .qty-btn:hover:not(:disabled) { background:#21253a; border-color:rgba(108,99,255,0.4); }
-        .qty-btn:disabled { opacity:0.28; cursor:not-allowed; }
+        /* ── TOP BAR ── */
+        .topbar {
+          background: linear-gradient(135deg, #1c1410 0%, #2d1f0e 50%, #1c1410 100%);
+          padding: 0 16px;
+          height: 56px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        }
+        .back-btn {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.15);
+          color: #fff;
+          border-radius: 8px;
+          width: 38px;
+          height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+          flex-shrink: 0;
+          text-decoration: none;
+        }
+        .back-btn:hover {
+          background: rgba(200,134,10,0.25);
+          border-color: rgba(200,134,10,0.5);
+          transform: translateX(-2px);
+        }
+        .topbar-logo {
+          font-family: 'Noto Serif', serif;
+          font-size: 22px;
+          font-weight: 600;
+          color: #d4a843;
+          text-decoration: none;
+          letter-spacing: -0.01em;
+          line-height: 1;
+        }
+        .topbar-logo span {
+          display: block;
+          font-size: 8px;
+          font-family: sans-serif;
+          font-weight: 400;
+          letter-spacing: 0.18em;
+          color: rgba(255,255,255,0.45);
+          text-transform: uppercase;
+          margin-top: -1px;
+        }
+        .topbar-cart-btn {
+          margin-left: auto;
+          background: #c8860a;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-family: inherit;
+          text-decoration: none;
+          transition: background 0.2s;
+        }
+        .topbar-cart-btn:hover { background: #e09610; }
 
-        .add-btn { flex:1; padding:14px 20px; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; border:none; transition:all 0.22s; display:flex; align-items:center; justify-content:center; gap:8px; font-family:inherit; }
-        .add-btn-primary { background:#6c63ff; color:white; }
-        .add-btn-primary:hover:not(:disabled) { background:#7c73ff; box-shadow:0 8px 24px rgba(108,99,255,0.35); transform:translateY(-1px); }
-        .add-btn-primary:disabled { opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
-        .add-btn-primary.success { background:#22d3a5; animation:pop 0.3s ease; }
+        /* ── BREADCRUMB ── */
+        .breadcrumb {
+          background: #fff;
+          border-bottom: 1px solid #ddd;
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 12px;
+          color: #555;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+        .breadcrumb a { color: #007185; text-decoration: none; }
+        .breadcrumb a:hover { color: #c45500; text-decoration: underline; }
 
-        .wish-btn { padding:14px 16px; border-radius:12px; background:#1a1d28; border:1.5px solid rgba(255,255,255,0.1); color:rgba(232,234,242,0.6); cursor:pointer; transition:all 0.18s; display:flex; align-items:center; justify-content:center; }
-        .wish-btn:hover { border-color:rgba(248,113,113,0.5); color:#f87171; }
-        .wish-btn.active { background:rgba(248,113,113,0.1); border-color:rgba(248,113,113,0.4); color:#f87171; }
+        /* ── MAIN CARD ── */
+        .product-card {
+          background: #fff;
+          margin: 10px;
+          border-radius: 10px;
+          overflow: hidden;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+          animation: slideUp 0.45s ease both;
+        }
 
-        .tab-btn { padding:11px 20px; font-size:13.5px; font-weight:600; cursor:pointer; background:none; border:none; border-bottom:2px solid transparent; color:rgba(232,234,242,0.35); transition:all 0.18s; font-family:inherit; }
-        .tab-btn.active { color:#e8eaf2; border-bottom-color:#6c63ff; }
-        .tab-btn:hover:not(.active) { color:rgba(232,234,242,0.65); }
+        /* ── IMAGE PANEL ── */
+        .img-main-wrap {
+          position: relative;
+          background: #f8f8f8;
+          overflow: hidden;
+          cursor: zoom-in;
+        }
+        .img-main-wrap:hover .zoom-lens { opacity: 1; }
+        .zoom-lens {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          pointer-events: none;
+          background: radial-gradient(circle 60px at var(--mx) var(--my), rgba(255,255,255,0.25) 0%, transparent 70%);
+          transition: opacity 0.2s;
+        }
 
-        .trust-item { display:flex; flex-direction:column; align-items:center; gap:7px; padding:14px 8px; background:#13161f; border:1px solid rgba(255,255,255,0.06); border-radius:12px; font-size:10.5px; color:rgba(232,234,242,0.4); font-weight:500; text-align:center; }
+        /* Thumb strip */
+        .thumb-strip { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; background: #fafafa; border-top: 1px solid #eee; }
+        .thumb-strip::-webkit-scrollbar { height: 3px; }
+        .thumb-strip::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+        .thumb-item {
+          flex-shrink: 0;
+          width: 60px;
+          height: 60px;
+          border-radius: 6px;
+          overflow: hidden;
+          border: 2px solid transparent;
+          cursor: pointer;
+          transition: border-color 0.18s;
+          background: #f0f0f0;
+        }
+        .thumb-item.active { border-color: #c8860a; }
+        .thumb-item:hover:not(.active) { border-color: #aaa; }
 
-        .img-nav { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:rgba(12,14,20,0.75); border:1px solid rgba(255,255,255,0.12); color:#e8eaf2; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.18s; }
-        .img-nav:hover { background:rgba(108,99,255,0.5); border-color:#6c63ff; }
-        .img-nav:disabled { opacity:0.25; cursor:not-allowed; }
+        /* ── INFO PANEL ── */
+        .info-panel { padding: 16px; }
 
-        .detail-page { animation: fadeUp 0.45s ease both; }
+        .product-title {
+          font-size: 17px;
+          font-weight: 400;
+          line-height: 1.45;
+          color: #0f1111;
+          margin-bottom: 8px;
+        }
 
-        .price-change { animation: pop 0.25s ease; }
+        .rating-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 14px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid #e7e7e7;
+        }
+        .stars { color: #c8860a; font-size: 14px; letter-spacing: 1px; }
+        .rating-count { font-size: 13px; color: #007185; cursor: pointer; }
+        .rating-count:hover { color: #c45500; text-decoration: underline; }
+
+        /* Price block */
+        .price-block {
+          background: linear-gradient(135deg, #fffbf3 0%, #fff8ec 100%);
+          border: 1px solid #f0d090;
+          border-radius: 10px;
+          padding: 14px 16px;
+          margin-bottom: 14px;
+        }
+        .price-label { font-size: 11px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .price-main {
+          font-size: 30px;
+          font-weight: 700;
+          color: #0f1111;
+          font-family: 'Noto Serif', serif;
+          line-height: 1;
+        }
+        .price-main sup { font-size: 16px; vertical-align: super; font-weight: 700; }
+        .price-was { font-size: 13px; color: #888; text-decoration: line-through; margin-top: 4px; }
+        .price-saving {
+          display: inline-block;
+          background: #e8f5e9;
+          color: #2e7d32;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 3px 10px;
+          border-radius: 50px;
+          margin-top: 6px;
+          border: 1px solid #c8e6c9;
+        }
+
+        /* EMI note */
+        .emi-note {
+          font-size: 12px;
+          color: #555;
+          margin-bottom: 16px;
+          padding: 8px 12px;
+          background: #f6f0ff;
+          border-radius: 8px;
+          border: 1px solid #e0d0ff;
+        }
+        .emi-note strong { color: #6a0dad; }
+
+        /* ── VARIANT OPTIONS ── */
+        .option-section { margin-bottom: 16px; }
+        .option-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: #0f1111;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .option-label span { color: #888; font-weight: 400; }
+
+        /* Color variant – image tile (Amazon style) */
+        .color-tile-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .color-tile {
+          border: 2px solid #ddd;
+          border-radius: 8px;
+          overflow: hidden;
+          width: 90px;
+          cursor: pointer;
+          transition: all 0.2s;
+          background: #f8f8f8;
+          position: relative;
+        }
+        .color-tile:hover { border-color: #c8860a; transform: scale(1.03); }
+        .color-tile.selected { border-color: #c8860a; box-shadow: 0 0 0 2px rgba(200,134,10,0.3); }
+        .color-tile.unavailable { opacity: 0.35; cursor: not-allowed; filter: grayscale(0.6); }
+        .color-tile-img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+        .color-tile-label {
+          text-align: center;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 5px 4px;
+          color: #333;
+          border-top: 1px solid #eee;
+          background: #fff;
+        }
+        .color-tile.selected .color-tile-label { color: #c8860a; }
+
+        /* Size chips */
+        .size-chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .size-chip {
+          border: 1px solid #888;
+          border-radius: 6px;
+          padding: 10px 16px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.18s;
+          background: #fff;
+          color: #0f1111;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          min-width: 72px;
+        }
+        .size-chip:hover:not(:disabled) { border-color: #c8860a; background: #fffbf3; }
+        .size-chip.selected { border-color: #c8860a; background: #fffbf3; box-shadow: 0 0 0 2px rgba(200,134,10,0.25); font-weight: 700; }
+        .size-chip.unavailable { opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
+        .size-chip-price { font-size: 10px; color: #888; font-weight: 400; }
+        .size-chip.selected .size-chip-price { color: #c8860a; }
+
+        /* Generic text chip */
+        .text-chip {
+          border: 1px solid #aaa;
+          border-radius: 6px;
+          padding: 8px 14px;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.18s;
+          background: #fff;
+          color: #0f1111;
+          font-family: inherit;
+        }
+        .text-chip:hover:not(:disabled) { border-color: #c8860a; background: #fffbf3; }
+        .text-chip.selected { border-color: #c8860a; background: #fffbf3; font-weight: 600; }
+        .text-chip.unavailable { opacity: 0.35; cursor: not-allowed; text-decoration: line-through; }
+
+        /* Stock */
+        .stock-row {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 14px;
+        }
+        .stock-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        /* Qty */
+        .qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .qty-label { font-size: 13px; color: #555; font-weight: 600; min-width: 40px; }
+        .qty-box {
+          display: flex;
+          align-items: center;
+          border: 1px solid #ccc;
+          border-radius: 8px;
+          overflow: hidden;
+          background: #fff;
+        }
+        .qty-btn {
+          width: 38px;
+          height: 38px;
+          background: #f0f0f0;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          color: #333;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+          font-weight: 300;
+          font-family: inherit;
+        }
+        .qty-btn:hover:not(:disabled) { background: #e0e0e0; }
+        .qty-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .qty-num {
+          width: 44px;
+          text-align: center;
+          font-size: 16px;
+          font-weight: 700;
+          color: #0f1111;
+          border-left: 1px solid #ddd;
+          border-right: 1px solid #ddd;
+          height: 38px;
+          line-height: 38px;
+        }
+        .qty-total { font-size: 13px; color: #555; }
+        .qty-total strong { color: #0f1111; font-weight: 700; }
+
+        /* CTA buttons */
+        .cta-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+        .btn-add-cart {
+          width: 100%;
+          padding: 13px;
+          background: linear-gradient(135deg, #f0b429 0%, #d4920a 100%);
+          border: 1px solid #c8860a;
+          border-radius: 50px;
+          font-size: 15px;
+          font-weight: 700;
+          color: #0f1111;
+          cursor: pointer;
+          font-family: inherit;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: all 0.22s;
+          box-shadow: 0 2px 8px rgba(200,134,10,0.3);
+          letter-spacing: 0.01em;
+        }
+        .btn-add-cart:hover:not(:disabled) {
+          background: linear-gradient(135deg, #f5c040 0%, #e09610 100%);
+          box-shadow: 0 4px 16px rgba(200,134,10,0.45);
+          transform: translateY(-1px);
+        }
+        .btn-add-cart:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-add-cart.success {
+          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+          border-color: #16a34a;
+          animation: popIn 0.3s ease;
+          color: #fff;
+          box-shadow: 0 4px 16px rgba(34,197,94,0.4);
+        }
+        .btn-wishlist {
+          width: 100%;
+          padding: 12px;
+          background: #fff;
+          border: 1px solid #ccc;
+          border-radius: 50px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+          cursor: pointer;
+          font-family: inherit;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: all 0.2s;
+        }
+        .btn-wishlist:hover { border-color: #c8860a; color: #c8860a; background: #fffbf3; }
+        .btn-wishlist.active { background: #fff0ed; border-color: #c04e2a; color: #c04e2a; }
+
+        /* Security badges */
+        .security-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          padding: 12px 0;
+          border-top: 1px solid #eee;
+          border-bottom: 1px solid #eee;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        }
+        .security-item {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11px;
+          color: #555;
+          font-weight: 500;
+        }
+
+        /* Seller box */
+        .seller-box {
+          background: #f8f8f8;
+          border: 1px solid #e0e0e0;
+          border-radius: 10px;
+          padding: 14px;
+          margin-bottom: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .seller-row { display: flex; justify-content: space-between; font-size: 13px; }
+        .seller-row-key { color: #555; }
+        .seller-row-val { color: #007185; font-weight: 600; }
+        .seller-row-val.green { color: #2e7d32; }
+
+        /* Tab section */
+        .tab-bar {
+          display: flex;
+          border-bottom: 2px solid #e7e7e7;
+          background: #fff;
+          margin: 10px;
+          border-radius: 10px 10px 0 0;
+          overflow: hidden;
+        }
+        .tab-btn {
+          flex: 1;
+          padding: 14px 8px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          background: none;
+          border: none;
+          border-bottom: 3px solid transparent;
+          color: #555;
+          transition: all 0.2s;
+          font-family: inherit;
+          margin-bottom: -2px;
+        }
+        .tab-btn.active { color: #c8860a; border-bottom-color: #c8860a; background: #fffbf3; }
+        .tab-btn:hover:not(.active) { color: #0f1111; background: #f6f6f6; }
+        .tab-content {
+          background: #fff;
+          margin: 0 10px 10px;
+          border-radius: 0 0 10px 10px;
+          padding: 20px 16px;
+          border: 1px solid #e7e7e7;
+          border-top: none;
+          min-height: 80px;
+          animation: fadeIn 0.25s ease;
+        }
+        .tab-content p { font-size: 14px; color: #444; line-height: 1.8; white-space: pre-line; }
+
+        /* Shipping info rows */
+        .ship-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+        .ship-row:last-child { border-bottom: none; }
+        .ship-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+        .ship-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+        .ship-body { font-size: 13px; color: #555; line-height: 1.6; }
+
+        /* Out of stock banner */
+        .oos-banner {
+          background: #fff3f3;
+          border: 1px solid #ffcdd2;
+          border-radius: 10px;
+          padding: 14px;
+          text-align: center;
+          color: #c62828;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        /* SKU */
+        .sku-row { font-size: 11px; color: #aaa; margin-top: 8px; }
+        .sku-row code { font-size: 11px; color: #888; }
+
+        /* ── DISCOUNT RIBBON ── */
+        .disc-ribbon {
+          position: absolute;
+          top: 14px;
+          left: 0;
+          background: linear-gradient(90deg, #c8860a, #e09610);
+          color: #fff;
+          font-size: 11px;
+          font-weight: 800;
+          padding: 5px 14px 5px 10px;
+          clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%);
+          letter-spacing: 0.04em;
+          z-index: 2;
+        }
+        .feat-ribbon {
+          position: absolute;
+          top: 14px;
+          right: 10px;
+          background: #1c1410;
+          color: #d4a843;
+          font-size: 9px;
+          font-weight: 800;
+          padding: 4px 10px;
+          border-radius: 5px;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+          z-index: 2;
+        }
+
+        @media (min-width: 768px) {
+          .product-card {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            margin: 16px auto;
+            max-width: 1100px;
+          }
+          .tab-bar { margin: 0 auto; max-width: 1100px; border-radius: 0; }
+          .tab-content { margin: 0 auto 16px; max-width: 1100px; border-radius: 0 0 10px 10px; }
+          .product-title { font-size: 20px; }
+          .price-main { font-size: 36px; }
+        }
       `}</style>
 
-      {/* ── Breadcrumb ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'rgba(232,234,242,0.35)', flexWrap: 'wrap' }}>
-        <Link href="/" style={{ color: 'inherit', textDecoration: 'none' }}>Home</Link>
-        <span>/</span>
-        <Link href="/products" style={{ color: 'inherit', textDecoration: 'none' }}>Products</Link>
+      {/* ── TOP BAR ── */}
+      <header className="topbar">
+        <Link href="/" className="back-btn" title="Back to Home">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+          </svg>
+        </Link>
+        <Link href="/" className="topbar-logo">
+          Shazfa kraft
+          <span>Islamic Store</span>
+        </Link>
+        <Link href="/cart" className="topbar-cart-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Cart
+        </Link>
+      </header>
+
+      {/* ── BREADCRUMB ── */}
+      <nav className="breadcrumb">
+        <Link href="/">Home</Link>
+        <span>›</span>
+        <Link href="/products">Products</Link>
         {product.categories && (
           <>
-            <span>/</span>
-            <Link href={`/products?category=${product.category_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{product.categories.name}</Link>
+            <span>›</span>
+            <Link href={`/products?category=${product.category_id}`}>{product.categories.name}</Link>
           </>
         )}
-        <span>/</span>
-        <span style={{ color: 'rgba(232,234,242,0.6)' }}>{product.name}</span>
-      </div>
+        <span>›</span>
+        <span style={{ color: '#0f1111', fontWeight: 500 }}>{product.name}</span>
+      </nav>
 
-      {/* ── Main Grid ── */}
-      <div className="detail-page" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'start' }}>
+      {/* ── PRODUCT CARD ── */}
+      <div className="product-card page-enter">
 
-        {/* ════════ LEFT — Image Gallery ════════ */}
-        <div style={{ display: 'flex', gap: 12 }}>
-
-          {/* Thumbnail strip */}
-          {allImages.length > 1 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 72, flexShrink: 0 }}>
-              {allImages.map((img, i) => (
-                <button key={i} className={`thumb ${selectedImage === i ? 'active' : ''}`} onClick={() => setSelectedImage(i)} style={{ width: 72, height: 72 }}>
-                  <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                    <Image src={img} alt={`View ${i + 1}`} fill style={{ objectFit: 'cover' }} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
+        {/* ══ LEFT: IMAGE GALLERY ══ */}
+        <div>
           {/* Main image */}
-          <div style={{ flex: 1 }}>
-            <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', background: '#13161f', border: '1px solid rgba(255,255,255,0.07)', aspectRatio: '1' }}>
-              {allImages[selectedImage]
-                ? <Image src={allImages[selectedImage]} alt={product.name} fill style={{ objectFit: 'cover' }} priority />
-                : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64 }}>📦</div>
-                )
-              }
-              {product.is_featured && (
-                <div style={{ position: 'absolute', top: 14, left: 14, background: 'linear-gradient(135deg,#d4a843,#a07820)', color: '#0a0a0a', fontSize: 9, fontWeight: 800, padding: '4px 10px', borderRadius: 7, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                  ★ Featured
+          <div
+            className="img-main-wrap"
+            style={{ aspectRatio: '1' }}
+            onMouseEnter={() => setImgZoom(true)}
+            onMouseLeave={() => setImgZoom(false)}
+            onMouseMove={handleMouseMove}
+            style={{
+              position: 'relative',
+              background: '#f8f8f8',
+              overflow: 'hidden',
+              aspectRatio: '1',
+              cursor: imgZoom ? 'zoom-in' : 'default',
+            }}
+          >
+            {allImages[selectedImage]
+              ? (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  position: 'relative',
+                  transform: imgZoom ? 'scale(1.5)' : 'scale(1)',
+                  transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
+                  transition: imgZoom ? 'none' : 'transform 0.3s ease',
+                }}>
+                  <Image src={allImages[selectedImage]} alt={product.name} fill style={{ objectFit: 'cover' }} priority />
                 </div>
-              )}
-              {discount > 0 && (
-                <div style={{ position: 'absolute', top: 14, right: 14, background: '#ef4444', color: 'white', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 7 }}>
-                  -{discount}% OFF
-                </div>
-              )}
-              {allImages.length > 1 && (
-                <>
-                  <button className="img-nav" onClick={() => setSelectedImage(p => Math.max(0, p - 1))} disabled={selectedImage === 0} style={{ left: 10 }}>
-                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                  </button>
-                  <button className="img-nav" onClick={() => setSelectedImage(p => Math.min(allImages.length - 1, p + 1))} disabled={selectedImage === allImages.length - 1} style={{ right: 10 }}>
-                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                </>
-              )}
-            </div>
+              )
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 60 }}>📦</div>
+            }
+            {discount > 0 && <div className="disc-ribbon">-{discount}% OFF</div>}
+            {product.is_featured && <div className="feat-ribbon">★ Featured</div>}
+
+            {/* Arrow nav */}
+            {allImages.length > 1 && (
+              <>
+                <button
+                  onClick={() => setSelectedImage(p => Math.max(0, p - 1))}
+                  disabled={selectedImage === 0}
+                  style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 34, height: 34, border: 'none', borderRadius: '50%', background: 'rgba(255,255,255,0.9)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 3, opacity: selectedImage === 0 ? 0.3 : 1 }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button
+                  onClick={() => setSelectedImage(p => Math.min(allImages.length - 1, p + 1))}
+                  disabled={selectedImage === allImages.length - 1}
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 34, height: 34, border: 'none', borderRadius: '50%', background: 'rgba(255,255,255,0.9)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 3, opacity: selectedImage === allImages.length - 1 ? 0.3 : 1 }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </>
+            )}
 
             {/* Dot indicators */}
             {allImages.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 12 }}>
+              <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
                 {allImages.map((_, i) => (
-                  <button key={i} onClick={() => setSelectedImage(i)} style={{ width: i === selectedImage ? 20 : 7, height: 7, borderRadius: 4, border: 'none', cursor: 'pointer', background: i === selectedImage ? '#6c63ff' : 'rgba(255,255,255,0.18)', transition: 'all 0.22s', padding: 0 }} />
+                  <button key={i} onClick={() => setSelectedImage(i)} style={{ width: i === selectedImage ? 22 : 7, height: 7, borderRadius: 4, border: 'none', cursor: 'pointer', background: i === selectedImage ? '#c8860a' : 'rgba(255,255,255,0.7)', transition: 'all 0.22s', padding: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                 ))}
               </div>
             )}
           </div>
+
+          {/* Thumbnail strip */}
+          {allImages.length > 1 && (
+            <div className="thumb-strip">
+              {allImages.map((img, i) => (
+                <div key={i} className={`thumb-item ${selectedImage === i ? 'active' : ''}`} onClick={() => setSelectedImage(i)}>
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    <Image src={img} alt={`View ${i + 1}`} fill style={{ objectFit: 'cover' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ════════ RIGHT — Product Info ════════ */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* ══ RIGHT: INFO ══ */}
+        <div className="info-panel">
 
-          {/* Category + Tags */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-            {product.categories && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', background: 'rgba(108,99,255,0.1)', padding: '3px 10px', borderRadius: 50, border: '1px solid rgba(108,99,255,0.22)', letterSpacing: '0.04em' }}>
+          {/* Category tag */}
+          {product.categories && (
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#007185', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {product.categories.name}
               </span>
-            )}
-            {product.tags?.slice(0, 2).map(tag => (
-              <span key={tag} style={{ fontSize: 11, fontWeight: 600, color: 'rgba(232,234,242,0.4)', background: 'rgba(255,255,255,0.05)', padding: '3px 10px', borderRadius: 50, border: '1px solid rgba(255,255,255,0.08)' }}>
-                {tag}
-              </span>
+            </div>
+          )}
+
+          {/* Title */}
+          <h1 className="product-title">{product.name}</h1>
+          {product.short_description && (
+            <p style={{ fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 10 }}>{product.short_description}</p>
+          )}
+
+          {/* Rating row (static for now) */}
+          <div className="rating-row">
+            <span className="stars">★★★★☆</span>
+            <span style={{ fontSize: 13, color: '#555' }}>4.4</span>
+            <span className="rating-count">(99 ratings)</span>
+            {product.tags?.slice(0, 1).map(tag => (
+              <span key={tag} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 50 }}>{tag}</span>
             ))}
           </div>
 
-          {/* Name */}
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, color: '#e8eaf2', lineHeight: 1.25, letterSpacing: '-0.02em', marginBottom: 8 }}>
-            {product.name}
-          </h1>
-
-          {product.short_description && (
-            <p style={{ fontSize: 14, color: 'rgba(232,234,242,0.5)', lineHeight: 1.65, marginBottom: 4 }}>{product.short_description}</p>
-          )}
-
-          {/* ── PRICE BLOCK (updates when variant selected) ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', margin: '16px 0', flexWrap: 'wrap' }}>
-            <span key={displayPrice} style={{ fontFamily: "'Syne', sans-serif", fontSize: 30, fontWeight: 800, color: '#e8eaf2', animation: 'pop 0.25s ease' }}>
-              ₹{Number(displayPrice).toLocaleString('en-IN')}
-            </span>
+          {/* ── PRICE ── */}
+          <div className="price-block">
+            <div className="price-label">M.R.P.</div>
+            <div className="price-main" key={displayPrice}>
+              <sup>₹</sup>{Math.floor(displayPrice).toLocaleString('en-IN')}
+              <sup style={{ fontSize: 14 }}>.{String(Math.round((displayPrice % 1) * 100)).padStart(2, '0')}</sup>
+            </div>
             {displayCompare && displayCompare > displayPrice && (
-              <span style={{ fontSize: 17, color: 'rgba(232,234,242,0.3)', textDecoration: 'line-through' }}>
-                ₹{Number(displayCompare).toLocaleString('en-IN')}
-              </span>
+              <div className="price-was">M.R.P.: ₹{Number(displayCompare).toLocaleString('en-IN')}</div>
             )}
             {discount > 0 && (
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#22d3a5', background: 'rgba(34,211,165,0.1)', padding: '4px 12px', borderRadius: 8, border: '1px solid rgba(34,211,165,0.22)' }}>
-                {discount}% OFF
-              </span>
+              <div className="price-saving">You save {discount}% · ₹{(Number(displayCompare) - displayPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
             )}
             {selectedVariant && (
-              <span style={{ fontSize: 11, color: 'rgba(232,234,242,0.35)', marginLeft: 'auto' }}>
-                {selectedVariant.name}
-              </span>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 6 }}>{selectedVariant.name}</div>
             )}
           </div>
 
           {/* EMI */}
-          <p style={{ fontSize: 12, color: 'rgba(232,234,242,0.38)', marginBottom: 20 }}>
-            or 3 Monthly Payments of{' '}
-            <strong style={{ color: '#a78bfa' }}>₹{Math.round(displayPrice / 3).toLocaleString('en-IN')}</strong>
-            {' '}with 0% EMI
-          </p>
+          <div className="emi-note">
+            💳 0% EMI from <strong>₹{Math.round(displayPrice / 3).toLocaleString('en-IN')}/month</strong> · 3 months · No cost EMI on select cards
+          </div>
 
           {/* ── VARIANT OPTIONS ── */}
           {optionKeys.map(optionKey => {
             const values = parsedOptions[optionKey] || []
             const isColor = optionKey.toLowerCase().includes('color') || optionKey.toLowerCase().includes('colour')
+            const isSize  = optionKey.toLowerCase() === 'size'
 
             return (
-              <div key={optionKey} style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(232,234,242,0.4)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-                    {optionKey}
-                  </p>
+              <div key={optionKey} className="option-section">
+                <div className="option-label">
+                  {optionKey}:
                   {selectedOptions[optionKey] && (
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(232,234,242,0.65)' }}>
-                      {selectedOptions[optionKey]}
-                      {optionKey.toLowerCase() === 'size' && ' — ₹' + Number(
-                        variants.find(v =>
-                          Object.entries({ ...selectedOptions, [optionKey]: selectedOptions[optionKey] }).every(([k, val]) => v.options[k] === val)
-                        )?.price ?? displayPrice
-                      ).toLocaleString('en-IN')}
-                    </span>
+                    <span style={{ color: '#0f1111', fontWeight: 700 }}>{selectedOptions[optionKey]}</span>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {values.map(val => {
-                    const colorHex = isColor ? (COLOR_MAP[val.toLowerCase()] ?? null) : null
-                    const available = isComboAvailable(variants, selectedOptions, optionKey, val)
-                    const isSelected = selectedOptions[optionKey] === val
-
-                    // Price preview for size option
-                    let pricePreview = ''
-                    if (optionKey.toLowerCase() === 'size') {
-                      const matchingVariant = variants.find(v =>
-                        v.options[optionKey] === val &&
-                        Object.entries(selectedOptions).filter(([k]) => k !== optionKey).every(([k, sv]) => v.options[k] === sv)
-                      )
-                      if (matchingVariant?.price && matchingVariant.price !== displayPrice) {
-                        pricePreview = `₹${Number(matchingVariant.price).toLocaleString('en-IN')}`
-                      }
-                    }
-
-                    return isColor && colorHex ? (
-                      <div key={val} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                        <button
-                          className={`color-swatch ${isSelected ? 'selected' : ''} ${!available ? 'unavailable' : ''}`}
+                {isColor ? (
+                  /* Amazon-style image tiles for color */
+                  <div className="color-tile-row">
+                    {values.map(val => {
+                      const available = isComboAvailable(variants, selectedOptions, optionKey, val)
+                      const isSelected = selectedOptions[optionKey] === val
+                      const colorHex = COLOR_MAP[val.toLowerCase()]
+                      // Try to find the variant's image for this color
+                      const colorVariant = variants.find(v => v.options[optionKey] === val)
+                      return (
+                        <div
+                          key={val}
+                          className={`color-tile ${isSelected ? 'selected' : ''} ${!available ? 'unavailable' : ''}`}
                           onClick={() => available && setSelectedOptions(p => ({ ...p, [optionKey]: val }))}
-                          style={{ background: colorHex }}
-                          title={`${val}${!available ? ' (out of stock)' : ''}`}
-                        />
-                        <span style={{ fontSize: 9, color: isSelected ? '#a78bfa' : 'rgba(232,234,242,0.3)', fontWeight: 600 }}>{val}</span>
-                      </div>
-                    ) : (
-                      <button
-                        key={val}
-                        className={`opt-chip ${isSelected ? 'selected' : ''} ${!available ? 'unavailable' : ''}`}
-                        onClick={() => available && setSelectedOptions(p => ({ ...p, [optionKey]: val }))}
-                        disabled={!available}
-                        title={!available ? 'Out of stock' : undefined}
-                      >
-                        {val}
-                        {pricePreview && <span style={{ fontSize: 10, color: isSelected ? '#a78bfa' : 'rgba(232,234,242,0.35)', marginLeft: 2 }}>{pricePreview}</span>}
-                      </button>
-                    )
-                  })}
-                </div>
+                          title={!available ? 'Out of stock' : val}
+                        >
+                          {colorHex ? (
+                            <div style={{ width: '100%', aspectRatio: '1', background: colorHex }} />
+                          ) : (
+                            <div style={{ width: '100%', aspectRatio: '1', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎨</div>
+                          )}
+                          <div className="color-tile-label">{val}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : isSize ? (
+                  /* Size chips with price */
+                  <div className="size-chip-row">
+                    {values.map(val => {
+                      const available = isComboAvailable(variants, selectedOptions, optionKey, val)
+                      const isSelected = selectedOptions[optionKey] === val
+                      const matchV = variants.find(v => v.options[optionKey] === val && Object.entries(selectedOptions).filter(([k]) => k !== optionKey).every(([k, sv]) => v.options[k] === sv))
+                      return (
+                        <button
+                          key={val}
+                          className={`size-chip ${isSelected ? 'selected' : ''} ${!available ? 'unavailable' : ''}`}
+                          onClick={() => available && setSelectedOptions(p => ({ ...p, [optionKey]: val }))}
+                          disabled={!available}
+                        >
+                          {val}
+                          {matchV?.price && (
+                            <span className="size-chip-price">₹{Number(matchV.price).toLocaleString('en-IN')}</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  /* Generic text chips */
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {values.map(val => {
+                      const available = isComboAvailable(variants, selectedOptions, optionKey, val)
+                      const isSelected = selectedOptions[optionKey] === val
+                      return (
+                        <button
+                          key={val}
+                          className={`text-chip ${isSelected ? 'selected' : ''} ${!available ? 'unavailable' : ''}`}
+                          onClick={() => available && setSelectedOptions(p => ({ ...p, [optionKey]: val }))}
+                          disabled={!available}
+                        >
+                          {val}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}
 
-          {/* ── Stock indicator ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: stock <= 0 ? '#f87171' : stock <= 10 ? '#f59e0b' : '#22d3a5',
-              boxShadow: `0 0 6px ${stock <= 0 ? '#f87171' : stock <= 10 ? '#f59e0b' : '#22d3a5'}`,
+          {/* ── STOCK ── */}
+          <div className="stock-row">
+            <div className="stock-dot" style={{
+              background: stock <= 0 ? '#d32f2f' : stock <= 10 ? '#f57c00' : '#2e7d32',
+              boxShadow: `0 0 0 3px ${stock <= 0 ? 'rgba(211,47,47,0.2)' : stock <= 10 ? 'rgba(245,124,0,0.2)' : 'rgba(46,125,50,0.2)'}`,
             }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: stock <= 0 ? '#f87171' : stock <= 10 ? '#f59e0b' : '#22d3a5' }}>
-              {stock <= 0 ? 'Out of Stock' : stock <= 10 ? `Only ${stock} left — order soon` : 'In Stock'}
+            <span style={{ color: stock <= 0 ? '#d32f2f' : stock <= 10 ? '#f57c00' : '#2e7d32' }}>
+              {stock <= 0 ? 'Currently Unavailable' : stock <= 10 ? `Only ${stock} left in stock — order soon!` : 'In Stock'}
             </span>
-            {optionKeys.length > 0 && !allSelected && (
-              <span style={{ marginLeft: 8, fontSize: 11, color: 'rgba(232,234,242,0.3)' }}>
-                (select all options above)
-              </span>
-            )}
           </div>
 
-          {/* ── Quantity + CTA ── */}
+          {optionKeys.length > 0 && !allSelected && (
+            <div style={{ fontSize: 12, color: '#c45500', marginBottom: 12, padding: '8px 12px', background: '#fff8f0', borderRadius: 8, border: '1px solid #ffd699' }}>
+              ⚠️ Please select {optionKeys.filter(k => !selectedOptions[k]).join(' and ')} to continue
+            </div>
+          )}
+
+          {/* ── QTY + CTA ── */}
           {stock > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(232,234,242,0.35)', textTransform: 'uppercase', letterSpacing: '0.09em', flexShrink: 0 }}>Qty</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#13161f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '4px 6px' }}>
+            <>
+              <div className="qty-row">
+                <span className="qty-label">Qty:</span>
+                <div className="qty-box">
                   <button className="qty-btn" onClick={() => setQuantity(p => Math.max(1, p - 1))} disabled={quantity <= 1}>−</button>
-                  <span style={{ width: 32, textAlign: 'center', fontSize: 15, fontWeight: 700 }}>{quantity}</span>
+                  <div className="qty-num">{quantity}</div>
                   <button className="qty-btn" onClick={() => setQuantity(p => Math.min(stock, p + 1))} disabled={quantity >= stock}>+</button>
                 </div>
-                <span style={{ fontSize: 12, color: 'rgba(232,234,242,0.3)' }}>
-                  Total: <strong style={{ color: '#e8eaf2' }}>₹{(displayPrice * quantity).toLocaleString('en-IN')}</strong>
-                </span>
+                <span className="qty-total">Total: <strong>₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></span>
               </div>
 
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div className="cta-stack">
                 <button
                   onClick={handleAddToCart}
                   disabled={!allSelected}
-                  className={`add-btn add-btn-primary${addedToCart ? ' success' : ''}`}
-                  title={!allSelected ? 'Please select all options first' : ''}
+                  className={`btn-add-cart${addedToCart ? ' success' : ''}`}
                 >
                   {addedToCart ? (
                     <>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ animation: 'checkPop 0.3s ease' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                       Added to Cart!
                     </>
                   ) : (
                     <>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      Add to Cart · ₹{(displayPrice * quantity).toLocaleString('en-IN')}
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      Add to Cart · ₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </>
                   )}
                 </button>
-                <button className={`wish-btn${isWishlisted ? ' active' : ''}`} onClick={() => setIsWishlisted(p => !p)} title="Wishlist">
-                  <svg width="18" height="18" fill={isWishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                <button
+                  className={`btn-wishlist${isWishlisted ? ' active' : ''}`}
+                  onClick={() => setIsWishlisted(p => !p)}
+                >
+                  <svg width="17" height="17" fill={isWishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
+                  {isWishlisted ? 'Saved to Wishlist' : 'Add to Wishlist'}
                 </button>
               </div>
-            </div>
+            </>
           )}
 
           {stock <= 0 && (
-            <div style={{ padding: '14px', borderRadius: 12, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.18)', color: '#f87171', textAlign: 'center', fontSize: 14, fontWeight: 600, marginBottom: 20 }}>
-              Currently Out of Stock
+            <div className="oos-banner">
+              <span style={{ fontSize: 20 }}>⚠️</span> Currently Out of Stock
             </div>
           )}
 
-          {/* ── Offers ── */}
-          <div style={{ background: '#13161f', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '16px 18px', marginBottom: 18 }}>
-            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'rgba(232,234,242,0.7)', marginBottom: 12, letterSpacing: '0.04em' }}>🏷️ Offers & Discounts</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {[
-                { icon: '🎁', text: <>Get <strong style={{ color: '#22d3a5' }}>10% OFF</strong> on orders above ₹6,999. Code <strong style={{ color: '#a78bfa', fontFamily: 'monospace', fontSize: 12 }}>FIRST10</strong></> },
-                { icon: '💳', text: <><strong style={{ color: '#22d3a5' }}>Extra 5% OFF</strong> on prepaid orders</> },
-                { icon: '🚚', text: <>Free shipping on orders above ₹499</> },
-              ].map((o, i) => (
-                <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>{o.icon}</span>
-                  <p style={{ fontSize: 12.5, color: 'rgba(232,234,242,0.5)', lineHeight: 1.55 }}>{o.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Trust Badges ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 18 }}>
+          {/* Security badges */}
+          <div className="security-row">
             {[
-              { icon: '🚚', label: 'Free Shipping' },
-              { icon: '🔒', label: 'Secure Checkout' },
-              { icon: '💬', label: 'Support 24/7' },
-              { icon: '↩️', label: 'Easy Returns' },
+              { icon: '🔒', label: 'Secure Payment' },
+              { icon: '🚚', label: 'Free Shipping ₹499+' },
+              { icon: '↩️', label: '7-Day Returns' },
+              { icon: '✅', label: 'Authentic Products' },
             ].map(b => (
-              <div key={b.label} className="trust-item">
-                <span style={{ fontSize: 20 }}>{b.icon}</span>
+              <div key={b.label} className="security-item">
+                <span>{b.icon}</span>
                 <span>{b.label}</span>
               </div>
             ))}
           </div>
 
+          {/* Seller / dispatch box */}
+          <div className="seller-box">
+            <div className="seller-row">
+              <span className="seller-row-key">Sold by</span>
+              <span className="seller-row-val">Shazfa kraft</span>
+            </div>
+            <div className="seller-row">
+              <span className="seller-row-key">Dispatches from</span>
+              <span className="seller-row-val">Shazfa kraft</span>
+            </div>
+            <div className="seller-row">
+              <span className="seller-row-key">Estimated delivery</span>
+              <span className="seller-row-val green">3–7 business days</span>
+            </div>
+          </div>
+
           {/* SKU */}
           {(selectedVariant?.sku || product.sku) && (
-            <p style={{ fontSize: 11, color: 'rgba(232,234,242,0.25)' }}>
-              SKU: <span style={{ fontFamily: 'monospace', color: 'rgba(232,234,242,0.4)' }}>{selectedVariant?.sku || product.sku}</span>
-            </p>
+            <div className="sku-row">SKU: <code>{selectedVariant?.sku || product.sku}</code></div>
           )}
         </div>
       </div>
 
-      {/* ── Description / Shipping Tabs ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px 56px' }}>
-        <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 0, marginBottom: 24 }}>
-          {(['description', 'shipping', 'reviews'] as const).map(tab => (
-            <button key={tab} className={`tab-btn${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-              {tab === 'description' ? 'Description' : tab === 'shipping' ? 'Shipping & Returns' : 'Reviews'}
-            </button>
-          ))}
-        </div>
+      {/* ── DESCRIPTION TABS ── */}
+      <div className="tab-bar">
+        {(['description', 'shipping', 'reviews'] as const).map(tab => (
+          <button key={tab} className={`tab-btn${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
+            {tab === 'description' ? '📄 Description' : tab === 'shipping' ? '🚚 Shipping & Returns' : '⭐ Reviews'}
+          </button>
+        ))}
+      </div>
 
-        <div style={{ background: '#13161f', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '28px 32px', maxWidth: 800 }}>
-          {activeTab === 'description' && (
-            product.description
-              ? <div style={{ color: 'rgba(232,234,242,0.62)', fontSize: 14.5, lineHeight: 1.95, whiteSpace: 'pre-line' }}>{product.description}</div>
-              : <p style={{ color: 'rgba(232,234,242,0.25)', fontStyle: 'italic', fontSize: 14 }}>No description available.</p>
-          )}
+      <div className="tab-content">
+        {activeTab === 'description' && (
+          product.description
+            ? <p>{product.description}</p>
+            : <p style={{ color: '#aaa', fontStyle: 'italic' }}>No description available.</p>
+        )}
 
-          {activeTab === 'shipping' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {[
-                { title: 'Free Shipping', body: 'Available on all orders above ₹499. Delivered within 3–7 business days after confirmation.' },
-                { title: 'Express Delivery', body: 'Next-day delivery available in select cities for an additional charge at checkout.' },
-                { title: 'Return Policy', body: 'Returns accepted within 7 days of delivery. Item must be unused, undamaged, and in original packaging.' },
-                { title: 'Prepaid Discount', body: 'Get an extra 5% off when you choose to pay online during checkout.' },
-              ].map(s => (
-                <div key={s.title}>
-                  <p style={{ fontWeight: 700, color: '#e8eaf2', marginBottom: 5, fontSize: 14 }}>{s.title}</p>
-                  <p style={{ color: 'rgba(232,234,242,0.5)', fontSize: 13.5, lineHeight: 1.7 }}>{s.body}</p>
+        {activeTab === 'shipping' && (
+          <div>
+            {[
+              { icon: '🚚', title: 'Free Shipping', body: 'Available on all orders above ₹499. Delivered within 3–7 business days.' },
+              { icon: '⚡', title: 'Express Delivery', body: 'Next-day delivery in select cities for an additional charge.' },
+              { icon: '↩️', title: 'Return Policy', body: 'Returns accepted within 7 days of delivery. Item must be unused and in original packaging.' },
+              { icon: '💳', title: 'Prepaid Discount', body: 'Get an extra 5% off when you pay online at checkout.' },
+            ].map(s => (
+              <div key={s.title} className="ship-row">
+                <div className="ship-icon">{s.icon}</div>
+                <div>
+                  <div className="ship-title">{s.title}</div>
+                  <div className="ship-body">{s.body}</div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
+        )}
 
-          {activeTab === 'reviews' && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'rgba(232,234,242,0.3)' }}>
-              <p style={{ fontSize: 40, marginBottom: 12 }}>⭐</p>
-              <p style={{ fontSize: 15, fontWeight: 600 }}>No reviews yet</p>
-              <p style={{ fontSize: 13, marginTop: 6 }}>Be the first to review this product.</p>
-            </div>
-          )}
-        </div>
+        {activeTab === 'reviews' && (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#aaa' }}>
+            <p style={{ fontSize: 36, marginBottom: 10 }}>⭐</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#555' }}>No reviews yet</p>
+            <p style={{ fontSize: 13, marginTop: 6 }}>Be the first to review this product.</p>
+          </div>
+        )}
       </div>
+
     </div>
   )
 }

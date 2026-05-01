@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 export default function OrderSuccessPage() {
   const [visible, setVisible] = useState(false)
-  const orderNo = `SHF-${Date.now().toString().slice(-6)}`
+const searchParams = useSearchParams()
+const orderNo = searchParams.get('orderNumber') || `SHF-${Date.now().toString().slice(-6)}`
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100)
