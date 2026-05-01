@@ -786,20 +786,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         {/* ══ LEFT: IMAGE GALLERY ══ */}
         <div>
           {/* Main image */}
-          <div
-            className="img-main-wrap"
-            style={{ aspectRatio: '1' }}
-            onMouseEnter={() => setImgZoom(true)}
-            onMouseLeave={() => setImgZoom(false)}
-            onMouseMove={handleMouseMove}
-            style={{
-              position: 'relative',
-              background: '#f8f8f8',
-              overflow: 'hidden',
-              aspectRatio: '1',
-              cursor: imgZoom ? 'zoom-in' : 'default',
-            }}
-          >
+      <div
+  className="img-main-wrap"
+  onMouseEnter={() => setImgZoom(true)}
+  onMouseLeave={() => setImgZoom(false)}
+  onMouseMove={handleMouseMove}
+  style={{
+    position: 'relative',
+    background: '#f8f8f8',
+    overflow: 'hidden',
+    aspectRatio: '1',
+    cursor: imgZoom ? 'zoom-in' : 'default',
+  }}
+>
             {allImages[selectedImage]
               ? (
                 <div style={{
