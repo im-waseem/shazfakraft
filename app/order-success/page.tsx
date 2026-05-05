@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
-export default function OrderSuccessPage() {
+function OrderSuccessContent() {
   const [visible, setVisible] = useState(false)
 const searchParams = useSearchParams()
 const orderNo = searchParams.get('orderNumber') || `SHF-${Date.now().toString().slice(-6)}`
@@ -136,5 +136,13 @@ const orderNo = searchParams.get('orderNumber') || `SHF-${Date.now().toString().
         </div>
       </main>
     </div>
+  )
+}
+
+export default function OrderSuccessPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#fffbf5' }} />}>
+      <OrderSuccessContent />
+    </Suspense>
   )
 }
