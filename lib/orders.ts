@@ -2,6 +2,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 /* ─── Types matching your DB schema ─── */
+
 export interface OrderItem {
   name: string
   quantity: number
@@ -46,7 +47,14 @@ export interface Order {
   customers: Customer | null
 }
 
-/* ─── Fetch all orders (inject supabase client — works in both Server Components and Client Components) ─── */
+/* ─── Helper to normalize Supabase relation ─── */
+function normalizeCustomer(input: any): Customer | null {
+  if (!input) return null
+  if (Array.isArray(input)) return input[0] ?? null
+  return input
+}
+
+/* ─── Fetch all orders ─── */
 export async function getOrders(supabase: SupabaseClient): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
@@ -83,18 +91,32 @@ export async function getOrders(supabase: SupabaseClient): Promise<Order[]> {
   }
 
   return (data || []).map((o: any) => ({
-    ...o,
+    id: o.id,
+    order_number: o.order_number,
+    customer_id: o.customer_id,
+    status: o.status,
+    payment_status: o.payment_status,
+    fulfillment_status: o.fulfillment_status ?? 'pending',
+    subtotal: o.subtotal,
+    tax_amount: o.tax_amount,
+    shipping_amount: o.shipping_amount,
+    discount_amount: o.discount_amount,
+    total_amount: o.total_amount,
+    currency: o.currency ?? 'INR',
     items: Array.isArray(o.items) ? o.items : [],
     shipping_address: o.shipping_address ?? null,
     billing_address: o.billing_address ?? null,
-    customers: o.customers ?? null,
-    fulfillment_status: o.fulfillment_status ?? 'pending',
-    currency: o.currency ?? 'INR',
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+    customers: normalizeCustomer(o.customers),
   }))
 }
 
-/* ─── Fetch a single order by ID ─── */
-export async function getOrderById(supabase: SupabaseClient, id: string): Promise<Order | null> {
+/* ─── Fetch single order ─── */
+export async function getOrderById(
+  supabase: SupabaseClient,
+  id: string
+): Promise<Order | null> {
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -131,13 +153,24 @@ export async function getOrderById(supabase: SupabaseClient, id: string): Promis
   }
 
   return {
-    ...data,
+    id: data.id,
+    order_number: data.order_number,
+    customer_id: data.customer_id,
+    status: data.status,
+    payment_status: data.payment_status,
+    fulfillment_status: data.fulfillment_status ?? 'pending',
+    subtotal: data.subtotal,
+    tax_amount: data.tax_amount,
+    shipping_amount: data.shipping_amount,
+    discount_amount: data.discount_amount,
+    total_amount: data.total_amount,
+    currency: data.currency ?? 'INR',
     items: Array.isArray(data.items) ? data.items : [],
     shipping_address: data.shipping_address ?? null,
     billing_address: data.billing_address ?? null,
-    customers: data.customers ?? null,
-    fulfillment_status: data.fulfillment_status ?? 'pending',
-    currency: data.currency ?? 'INR',
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    customers: normalizeCustomer(data.customers),
   }
 }
 
@@ -149,7 +182,10 @@ export async function updateOrderStatus(
 ): Promise<void> {
   const { error } = await supabase
     .from('orders')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id)
 
   if (error) {
@@ -159,11 +195,16 @@ export async function updateOrderStatus(
 }
 
 /* ─── Helpers ─── */
+
 export const formatMoney = (amount?: number, currency = 'INR') =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(amount ?? 0)
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+  }).format(amount ?? 0)
 
 export const getCustomerName = (order: Order): string => {
   if (!order.customers) return 'Guest'
-  const { first_name, last_name } = order.customers
-  return [first_name, last_name].filter(Boolean).join(' ') || order.customers.email
+
+  const { first_name, last_name, email } = order.customers
+  return [first_name, last_name].filter(Boolean).join(' ') || email
 }

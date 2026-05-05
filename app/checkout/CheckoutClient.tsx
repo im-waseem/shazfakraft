@@ -53,9 +53,45 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
 
   const handleOrder = async () => {
     setProcessing(true)
-    await new Promise(r => setTimeout(r, 1800))
-    localStorage.removeItem('cart')
-    router.push('/order-success')
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cartItems,
+          shipping: {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            email: form.email,
+            phone: form.phone,
+            address: form.address,
+            city: form.city,
+            state: form.state,
+            pincode: form.pin,
+          },
+          billing: {
+            address: form.address,
+            city: form.city,
+            state: form.state,
+            pincode: form.pin,
+          },
+          notes: `Payment method: ${payMethod}`,
+        }),
+      })
+
+      const result = await res.json()
+      if (!res.ok || !result?.order?.order_number) {
+        alert(result?.error || 'Failed to place order. Please try again.')
+        setProcessing(false)
+        return
+      }
+
+      localStorage.removeItem('cart')
+      router.push(`/order-success?orderNumber=${encodeURIComponent(result.order.order_number)}`)
+    } catch (e) {
+      alert('Unable to place order right now. Please try again.')
+      setProcessing(false)
+    }
   }
 
   if (!cartItems.length) return null

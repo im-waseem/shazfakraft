@@ -445,7 +445,14 @@ export default function Home() {
             <div>
               <p style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.1em', color: '#d4a843', marginBottom: 14 }}>Contact</p>
               <p style={{ color: '#9a7a5a', fontSize: 13, marginBottom: 6 }}>support@shafa.in</p>
-              <p style={{ color: '#9a7a5a', fontSize: 13 }}>+91 91234 56789</p>
+              <a
+                href="https://wa.me/919123456789"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#25D366', fontSize: 13, textDecoration: 'none', fontWeight: 700 }}
+              >
+                WhatsApp: +91 91234 56789
+              </a>
             </div>
           </div>
           <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 20, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
@@ -454,6 +461,34 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <a
+        href="https://wa.me/919123456789"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat on WhatsApp"
+        style={{
+          position: 'fixed',
+          left: 18,
+          bottom: 22,
+          width: 54,
+          height: 54,
+          borderRadius: '50%',
+          background: '#25D366',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textDecoration: 'none',
+          boxShadow: '0 8px 20px rgba(37,211,102,.35)',
+          zIndex: 60,
+          fontSize: 24,
+          fontWeight: 700
+        }}
+        title="Chat with us on WhatsApp"
+      >
+        ☎
+      </a>
     </div>
   )
 }

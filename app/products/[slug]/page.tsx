@@ -84,6 +84,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [activeTab, setActiveTab]         = useState<'description' | 'shipping' | 'reviews'>('description')
   const [imgZoom, setImgZoom]             = useState(false)
   const [zoomPos, setZoomPos]             = useState({ x: 50, y: 50 })
+  const [moreProducts, setMoreProducts]   = useState<Product[]>([])
 
   const fetchProduct = useCallback(async () => {
     const supabase = createClient()
@@ -118,6 +119,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         Object.entries(opts).forEach(([k, vals]) => { auto[k] = vals[0] })
         setSelectedOptions(auto)
       }
+
+      const relatedQuery = supabase
+        .from('products')
+        .select('id,name,slug,price,compare_price,main_image_url,inventory_quantity,is_featured')
+        .eq('is_active', true)
+        .neq('id', data.id)
+        .order('created_at', { ascending: false })
+        .limit(8)
+
+      const { data: relatedData } = data.category_id
+        ? await relatedQuery.eq('category_id', data.category_id)
+        : await relatedQuery
+
+      setMoreProducts((relatedData as Product[]) || [])
     }
     setLoading(false)
   }, [slug])
@@ -141,7 +156,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const discount       = displayCompare && displayCompare > displayPrice
     ? Math.round((1 - displayPrice / displayCompare) * 100) : 0
   const stock          = selectedVariant?.inventory_quantity ?? product?.inventory_quantity ?? 0
-  const allSelected    = optionKeys.length > 0 && optionKeys.every(k => selectedOptions[k])
+  const allSelected    = optionKeys.length === 0 || optionKeys.every(k => selectedOptions[k])
 
   const handleAddToCart = () => {
     if (!product || !allSelected) return
@@ -666,6 +681,62 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         }
         .tab-content p { font-size: 14px; color: #444; line-height: 1.8; white-space: pre-line; }
 
+        /* More products */
+        .more-products-wrap {
+          max-width: 1100px;
+          margin: 0 auto 30px;
+          padding: 0 10px;
+        }
+        .more-products-title {
+          font-size: 20px;
+          font-weight: 700;
+          margin: 14px 0;
+          color: #0f1111;
+        }
+        .more-products-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 12px;
+        }
+        .more-card {
+          background: #fff;
+          border: 1px solid #e7e7e7;
+          border-radius: 10px;
+          overflow: hidden;
+          text-decoration: none;
+          color: inherit;
+          transition: all .2s;
+        }
+        .more-card:hover {
+          border-color: #c8860a;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0,0,0,.08);
+        }
+        .more-card-img {
+          width: 100%;
+          aspect-ratio: 1;
+          background: #f4f4f4;
+          position: relative;
+        }
+        .more-card-body { padding: 10px; }
+        .more-card-name {
+          font-size: 13px;
+          line-height: 1.4;
+          min-height: 36px;
+          color: #0f1111;
+          margin-bottom: 6px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .more-card-price {
+          font-size: 16px;
+          font-weight: 700;
+          color: #c8860a;
+          font-family: 'Noto Serif', serif;
+        }
+
         /* Shipping info rows */
         .ship-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
         .ship-row:last-child { border-bottom: none; }
@@ -1126,6 +1197,31 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           </div>
         )}
       </div>
+
+      {moreProducts.length > 0 && (
+        <section className="more-products-wrap">
+          <h2 className="more-products-title">More Products</h2>
+          <div className="more-products-grid">
+            {moreProducts.map((item) => (
+              <Link key={item.id} href={`/products/${item.slug}`} className="more-card">
+                <div className="more-card-img">
+                  {item.main_image_url ? (
+                    <Image src={item.main_image_url} alt={item.name} fill style={{ objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>
+                      📦
+                    </div>
+                  )}
+                </div>
+                <div className="more-card-body">
+                  <p className="more-card-name">{item.name}</p>
+                  <p className="more-card-price">₹{Number(item.price || 0).toLocaleString('en-IN')}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
     </div>
   )

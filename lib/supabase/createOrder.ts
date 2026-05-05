@@ -14,7 +14,7 @@ interface CreateOrderInput {
 }
 
 export async function createOrder(input: CreateOrderInput) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // ✅ Normalize items
   const items = (input.items || []).map(item => ({
@@ -41,7 +41,7 @@ export async function createOrder(input: CreateOrderInput) {
 
       status: 'pending',
       payment_status: 'pending',
-      fulfillment_status: 'pending',
+      fulfillment_status: 'unfulfilled',
 
       subtotal,
       tax_amount,
