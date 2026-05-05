@@ -31,14 +31,29 @@ export default function ProductsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [{ data: prods }, { data: cats }] = await Promise.all([
+    const [{ data: prodsActive }, { data: cats }] = await Promise.all([
       supabase
         .from('products')
         .select(`*, categories (id, name, slug), product_variants (id, price, compare_price, inventory_quantity, options, is_active)`)
-        .eq('is_active', true),
+        .eq('is_active', true)
+        .order('created_at', { ascending: false }),
       supabase.from('categories').select('*').eq('is_active', true).order('position'),
     ])
-    setProducts(prods || [])
+
+    // Fallback: if active products are too few, fetch all products
+    // (helps when products are created but not marked active yet)
+    let prods = prodsActive || []
+    if (prods.length <= 1) {
+      const { data: prodsAll } = await supabase
+        .from('products')
+        .select(`*, categories (id, name, slug), product_variants (id, price, compare_price, inventory_quantity, options, is_active)`)
+        .order('created_at', { ascending: false })
+      if (prodsAll && prodsAll.length > prods.length) {
+        prods = prodsAll
+      }
+    }
+
+    setProducts(prods)
     setCategories(cats || [])
     if (prods && prods.length > 0) {
       const max = Math.ceil(Math.max(...prods.map((p: any) => Number(p.price))))

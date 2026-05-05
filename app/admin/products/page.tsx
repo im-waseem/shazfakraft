@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -786,8 +786,8 @@ export default function ProductsManagementPage() {
                 const isExpanded = expandedId === product.id
 
                 return (
-                  <>
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                  <Fragment key={product.id}>
+                    <tr className="hover:bg-gray-50 transition-colors">
                       {/* Product */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
@@ -904,7 +904,7 @@ export default function ProductsManagementPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
 

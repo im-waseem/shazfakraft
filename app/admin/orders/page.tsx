@@ -11,7 +11,7 @@ export default function AdminOrdersPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('orders')
-      .select('id, order_number, total_amount, status, payment_status, fulfillment_status, created_at, shipping_address, customers(first_name,last_name,email,phone)')
+      .select('id, order_number, total_amount, status, payment_status, fulfillment_status, created_at, shipping_address, items, customers(first_name,last_name,email,phone)')
       .order('created_at', { ascending: false })
 
     setOrders(data || [])
@@ -66,6 +66,22 @@ export default function AdminOrdersPage() {
               <p><b>Customer:</b> {c?.first_name || ''} {c?.last_name || ''} ({c?.email || '-'})</p>
               <p><b>Phone:</b> {c?.phone || '-'}</p>
               <p><b>Address:</b> {o.shipping_address?.address || '-'}, {o.shipping_address?.city || '-'} {o.shipping_address?.pincode || '-'}</p>
+
+              <div style={{ marginTop: 10, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+                <p style={{ fontWeight: 600, marginBottom: 6 }}>Products</p>
+                {Array.isArray(o.items) && o.items.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {o.items.map((it: any, idx: number) => (
+                      <div key={`${o.id}-item-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                        <span>{it.name || 'Item'} × {Number(it.quantity || 1)}</span>
+                        <span>₹{Number(it.total ?? (Number(it.price || 0) * Number(it.quantity || 1))).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: '#6b7280' }}>No product items found for this order.</p>
+                )}
+              </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <select value={o.status} onChange={e => updateOrder(o.id, { status: e.target.value })}>

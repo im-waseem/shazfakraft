@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 interface CartItem {
   id: string
@@ -35,14 +36,43 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
   const router = useRouter()
 
   useEffect(() => {
-    const saved = localStorage.getItem('cart')
-    if (saved) {
-      const items = JSON.parse(saved)
-      if (!items.length) router.push('/cart')
-      setCartItems(items)
-    } else {
-      router.push('/cart')
+    const init = async () => {
+      const saved = localStorage.getItem('cart')
+      if (saved) {
+        const items = JSON.parse(saved)
+        if (!items.length) router.push('/cart')
+        setCartItems(items)
+      } else {
+        router.push('/cart')
+      }
+
+      // Autofill from saved profile (if logged in)
+      const supabase = createClient()
+      const { data: authData } = await supabase.auth.getUser()
+      const user = authData.user
+      if (!user) return
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!customer) return
+
+      setForm(prev => ({
+        ...prev,
+        firstName: customer.first_name || prev.firstName,
+        lastName: customer.last_name || prev.lastName,
+        email: customer.email || user.email || prev.email,
+        phone: customer.phone || prev.phone,
+        address: customer.home_address || customer.shipping_address?.address || prev.address,
+        city: customer.city || customer.shipping_address?.city || prev.city,
+        pin: customer.pincode || customer.shipping_address?.pincode || prev.pin,
+      }))
     }
+
+    init()
   }, [router])
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
