@@ -3,10 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const ADMIN_EMAIL = 'waseemakram060396@gmail.com'
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+export async function proxy(request: NextRequest) {
+  let supabaseResponse = NextResponse.next()
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,9 +18,9 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+
+          supabaseResponse = NextResponse.next()
+
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -31,16 +29,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh the session to ensure it's up-to-date
+  // ✅ get user safely
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Check if the user is trying to access admin routes
   const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
 
+  // 🔒 ADMIN PROTECTION
   if (isAdminRoute) {
-    // If not authenticated, redirect to login
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
@@ -48,7 +45,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Check if user is the admin
     if (user.email !== ADMIN_EMAIL) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
@@ -57,23 +53,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // If user is authenticated and trying to access login page
+  // 🔁 LOGIN REDIRECT
   if (request.nextUrl.pathname === '/login' && user) {
+    const url = request.nextUrl.clone()
+
     if (user.email === ADMIN_EMAIL) {
-      // Admin user - redirect to admin dashboard
-      const url = request.nextUrl.clone()
       url.pathname = '/admin'
-      return NextResponse.redirect(url)
     } else {
-      // Customer user - redirect to e-commerce site (home page)
-      const url = request.nextUrl.clone()
       url.pathname = '/'
-      return NextResponse.redirect(url)
     }
+
+    return NextResponse.redirect(url)
   }
 
-  // If user is not authenticated and trying to access customer-only routes
+  // 🛒 CUSTOMER ROUTES
   const customerRoutes = ['/checkout', '/orders', '/profile', '/addresses']
+
   if (customerRoutes.includes(request.nextUrl.pathname) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
