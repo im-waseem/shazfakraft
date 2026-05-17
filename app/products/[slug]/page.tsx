@@ -5,50 +5,31 @@ import Link from 'next/link'
 import { useCallback, use, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+/* ─── Types ──────────────────────────────────────────────────────────────────*/
 interface Product {
-  id: string
-  name: string
-  slug: string
-  description: string
-  short_description: string
-  sku: string
-  price: number
-  compare_price: number | null
-  category_id: string | null
-  main_image_url: string
-  images: string[]
-  inventory_quantity: number
-  track_inventory: boolean
-  is_active: boolean
-  is_featured: boolean
-  tags: string[]
-  option_keys: string[]
+  id: string; name: string; slug: string; description: string
+  short_description: string; sku: string; price: number
+  compare_price: number | null; category_id: string | null
+  main_image_url: string; images: string[]; inventory_quantity: number
+  track_inventory: boolean; is_active: boolean; is_featured: boolean
+  tags: string[]; option_keys: string[]
   categories?: { name: string; slug: string }
 }
 interface Variant {
-  id: string
-  name: string | null
-  sku: string | null
-  price: number
-  compare_price: number | null
+  id: string; name: string | null; sku: string | null
+  price: number; compare_price: number | null
   inventory_quantity: number
   options: { size_inches?: string; color?: string }
-  is_active: boolean
-  image_url?: string | null
+  is_active: boolean; image_url?: string | null
 }
 
-// ─── Color swatches ───────────────────────────────────────────────────────────
+/* ─── Color map ──────────────────────────────────────────────────────────────*/
 const COLOR_HEX: Record<string, string> = {
-  gold:      '#d4a843',
-  silver:    '#c0c0c0',
-  black:     '#1a1a1a',
-  white:     '#f5f5f0',
-  'rose gold':'#b76e79',
-  bronze:    '#cd7f32',
+  gold: '#d4a843', silver: '#c0c0c0', black: '#1a1a1a',
+  white: '#f5f5f0', 'rose gold': '#b76e79', bronze: '#cd7f32',
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+/* ─── Helpers ────────────────────────────────────────────────────────────────*/
 function getVariant(variants: Variant[], size: string, color: string) {
   return variants.find(v =>
     v.is_active &&
@@ -71,55 +52,56 @@ function getSizesForColor(variants: Variant[], color: string) {
   )) as string[]
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+/* ─── Component ──────────────────────────────────────────────────────────────*/
 export default function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const router = useRouter()
+  const router   = useRouter()
 
-  const [product, setProduct]             = useState<Product | null>(null)
-  const [variants, setVariants]           = useState<Variant[]>([])
-  const [loading, setLoading]             = useState(true)
+  const [product,       setProduct]       = useState<Product | null>(null)
+  const [variants,      setVariants]      = useState<Variant[]>([])
+  const [loading,       setLoading]       = useState(true)
   const [selectedImage, setSelectedImage] = useState(0)
-  const [quantity, setQuantity]           = useState(1)
-  const [selectedSize, setSelectedSize]   = useState('')
+  const [quantity,      setQuantity]      = useState(1)
+  const [selectedSize,  setSelectedSize]  = useState('')
   const [selectedColor, setSelectedColor] = useState('')
-  const [addedToCart, setAddedToCart]     = useState(false)
-  const [isWishlisted, setIsWishlisted]   = useState(false)
-  const [activeTab, setActiveTab]         = useState<'description' | 'shipping' | 'reviews'>('description')
-  const [moreProducts, setMoreProducts]   = useState<Product[]>([])
-  const [priceFlash, setPriceFlash]       = useState(false)
+  const [addedToCart,   setAddedToCart]   = useState(false)
+  const [isWishlisted,  setIsWishlisted]  = useState(false)
+  const [activeTab,     setActiveTab]     = useState<'description'|'shipping'|'reviews'>('description')
+  const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
+  const [priceFlash,    setPriceFlash]    = useState(false)
   const [colorDropOpen, setColorDropOpen] = useState(false)
   const colorDropRef = useRef<HTMLDivElement>(null)
 
+  /* ── Fetch ───────────────────────────────────────────────────────────────*/
   const fetchProduct = useCallback(async () => {
     const supabase = createClient()
     let { data } = await supabase
-      .from('products')
-      .select('*, categories(name, slug)')
-      .eq('slug', slug)
-      .maybeSingle()
+      .from('products').select('*, categories(name, slug)')
+      .eq('slug', slug).maybeSingle()
     if (!data) {
       const { data: all } = await supabase
-        .from('products')
-        .select('*, categories(name, slug)')
-        .ilike('slug', `%${slug}%`)
-        .limit(1)
+        .from('products').select('*, categories(name, slug)')
+        .ilike('slug', `%${slug}%`).limit(1)
       if (all?.length) data = all[0]
     }
     if (data) {
       setProduct(data)
       const { data: vData } = await supabase
-        .from('product_variants')
-        .select('*')
-        .eq('product_id', data.id)
-        .eq('is_active', true)
-        .order('position')
+        .from('product_variants').select('*')
+        .eq('product_id', data.id).eq('is_active', true).order('position')
       const vList: Variant[] = vData || []
       setVariants(vList)
+
+      /* ── FIX: default-select first valid variant ────────────────────────
+         This ensures selectedVariant is never null on page load,
+         which was causing stock to fall back to product.inventory_quantity = 0 */
       if (vList.length > 0) {
-        setSelectedColor(vList[0].options.color ?? '')
-        setSelectedSize(vList[0].options.size_inches ?? '')
+        const firstColor = vList[0].options.color ?? ''
+        const firstSize  = vList[0].options.size_inches ?? ''
+        setSelectedColor(firstColor)
+        setSelectedSize(firstSize)
       }
+
       const relQ = supabase
         .from('products')
         .select('id,name,slug,price,compare_price,main_image_url,inventory_quantity')
@@ -135,59 +117,76 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   useEffect(() => { fetchProduct() }, [fetchProduct])
 
-  // Close color dropdown on outside click
+  /* Close color dropdown on outside click */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (colorDropRef.current && !colorDropRef.current.contains(e.target as Node)) {
+      if (colorDropRef.current && !colorDropRef.current.contains(e.target as Node))
         setColorDropOpen(false)
-      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Flash price animation on variant change
-  const flashPrice = () => {
-    setPriceFlash(true)
-    setTimeout(() => setPriceFlash(false), 400)
-  }
+  const flashPrice = () => { setPriceFlash(true); setTimeout(() => setPriceFlash(false), 400) }
 
-  // Derived state
+  /* ── Derived state ───────────────────────────────────────────────────────*/
   const allImages = product ? [
     ...(product.main_image_url ? [product.main_image_url] : []),
     ...(product.images?.filter(Boolean) || []),
   ] : []
-
-  // Get image for selected color (if variant has one, else fallback)
-  const colorVariant = variants.find(v =>
-    v.is_active &&
-    v.options.color?.toLowerCase() === selectedColor.toLowerCase() &&
-    (!selectedSize || v.options.size_inches === selectedSize)
-  )
-  const colorImage = (colorVariant as any)?.image_url ?? null
 
   const selectedVariant = getVariant(variants, selectedSize, selectedColor)
   const displayPrice    = selectedVariant?.price ?? product?.price ?? 0
   const displayCompare  = selectedVariant?.compare_price ?? product?.compare_price ?? null
   const discount        = displayCompare && displayCompare > displayPrice
     ? Math.round((1 - displayPrice / displayCompare) * 100) : 0
-  const stock           = selectedVariant?.inventory_quantity ?? product?.inventory_quantity ?? 0
+
+  /* ─── FIX: Smart stock logic ─────────────────────────────────────────────
+     Priority:
+       1. If a specific variant is selected → use its stock
+       2. If no variant selected but variants exist → sum all variant stocks
+          (never show OOS just because no selection was made yet)
+       3. Fallback to product.inventory_quantity for products without variants
+  */
+  const stock = (() => {
+    if (selectedVariant) return selectedVariant.inventory_quantity
+    if (variants.length > 0) return variants.reduce((a, v) => a + v.inventory_quantity, 0)
+    return product?.inventory_quantity ?? 0
+  })()
+
+  /* ─── FIX: Show stock message based on context ───────────────────────────*/
+  const stockLabel = (() => {
+    if (variants.length > 0 && !selectedVariant) {
+      // No combo selected yet — show total availability
+      const total = variants.reduce((a, v) => a + v.inventory_quantity, 0)
+      if (total === 0) return { text: 'Currently Unavailable', cls: 'oos' }
+      if (total <= 10) return { text: `Only ${total} units left — select a size & color`, cls: 'low-stock' }
+      return { text: 'Select size & color to check stock', cls: 'in-stock' }
+    }
+    if (stock <= 0)  return { text: 'Currently Unavailable', cls: 'oos' }
+    if (stock <= 10) return { text: `Only ${stock} left — order soon!`, cls: 'low-stock' }
+    return { text: `In Stock · ${stock} units available`, cls: 'in-stock' }
+  })()
+
+  /* ─── FIX: CTA disabled only when actually OOS (not just unselected) ────*/
+  const ctaDisabled = stock <= 0
 
   const availableSizes  = Array.from(new Set(
     variants.filter(v => v.is_active).map(v => v.options.size_inches).filter(Boolean)
   )) as string[]
-
   const availableColors = selectedSize
     ? getColorsForSize(variants, selectedSize)
     : Array.from(new Set(variants.filter(v => v.is_active).map(v => v.options.color).filter(Boolean))) as string[]
 
   const isSizeAvailable = (size: string) =>
-    variants.some(v => v.is_active && v.options.size_inches === size &&
+    variants.some(v =>
+      v.is_active && v.options.size_inches === size &&
       (!selectedColor || v.options.color?.toLowerCase() === selectedColor.toLowerCase()) &&
       v.inventory_quantity > 0)
 
   const isColorAvailable = (color: string) =>
-    variants.some(v => v.is_active &&
+    variants.some(v =>
+      v.is_active &&
       v.options.color?.toLowerCase() === color.toLowerCase() &&
       (!selectedSize || v.options.size_inches === selectedSize) &&
       v.inventory_quantity > 0)
@@ -200,7 +199,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     return v?.price ?? null
   }
 
-  // Switch size: also jump to matching image if color has one
   const handleSizeSelect = (size: string) => {
     setSelectedSize(size)
     const colorsForNew = getColorsForSize(variants, size)
@@ -210,7 +208,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     flashPrice()
   }
 
-  // Switch color: jump gallery to a matching image
   const handleColorSelect = (color: string) => {
     setSelectedColor(color)
     setColorDropOpen(false)
@@ -219,7 +216,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
       setSelectedSize(sizesForNew[0] ?? '')
     }
     flashPrice()
-    // Try to find and jump to image matching this color
     const colorIdx = allImages.findIndex(img =>
       img.toLowerCase().includes(color.toLowerCase().replace(/\s/g, ''))
     )
@@ -245,7 +241,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     setTimeout(() => setAddedToCart(false), 2800)
   }
 
-  // ── Loading / Not Found ───────────────────────────────────────────────────
+  const colorVariant = variants.find(v =>
+    v.is_active &&
+    v.options.color?.toLowerCase() === selectedColor.toLowerCase() &&
+    (!selectedSize || v.options.size_inches === selectedSize)
+  )
+  const colorImage = (colorVariant as any)?.image_url ?? null
+  const selectedColorHex = COLOR_HEX[selectedColor.toLowerCase()] || '#ccc'
+  const colorsCount = availableColors.length
+
+  /* ─── Loading / Not Found ────────────────────────────────────────────────*/
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#f9f7f4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center' }}>
@@ -266,16 +271,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     </div>
   )
 
-  const colorsCount = availableColors.length
-  const selectedColorHex = COLOR_HEX[selectedColor.toLowerCase()] || '#ccc'
-
   return (
     <div style={{ minHeight: '100vh', background: '#f5f3ef', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: '#1a1a1a' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        /* Animations */
         @keyframes spin     { to { transform: rotate(360deg); } }
         @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         @keyframes popIn    { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
@@ -283,15 +283,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         @keyframes priceFlash { 0%{opacity:0.3;transform:scale(0.96)} 100%{opacity:1;transform:scale(1)} }
         @keyframes dropDown { from{opacity:0;transform:translateY(-6px) scaleY(0.95)} to{opacity:1;transform:translateY(0) scaleY(1)} }
         @keyframes slideImg { from{opacity:0;transform:scale(1.03)} to{opacity:1;transform:scale(1)} }
-        @keyframes shimmerMove { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
         .price-flash { animation: priceFlash 0.35s ease both; }
         .page-enter  { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
-
-        /* NAV */
         .sk-nav {
-          background: #fff;
-          height: 58px; padding: 0 20px;
+          background: #fff; height: 58px; padding: 0 20px;
           display: flex; align-items: center; gap: 14px;
           position: sticky; top: 0; z-index: 100;
           border-bottom: 1px solid #ede9e0;
@@ -308,12 +303,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-cart-btn {
           margin-left:auto; background:#1a1a1a; color:#fff; border:none; border-radius:10px;
           padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none;
-          display:flex; align-items:center; gap:7px; transition: all .2s; letter-spacing:.01em;
+          display:flex; align-items:center; gap:7px; transition: all .2s;
           font-family:inherit;
         }
         .sk-cart-btn:hover { background:#b8860b; transform:translateY(-1px); box-shadow: 0 4px 14px rgba(184,134,11,.3); }
-
-        /* BREADCRUMB */
         .sk-crumb {
           background:#fff; border-bottom:1px solid #ede9e0;
           padding:10px 20px; font-size:12px; color:#999;
@@ -322,39 +315,23 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         }
         .sk-crumb a { color:#8b6914; text-decoration:none; font-weight:500; }
         .sk-crumb a:hover { text-decoration:underline; }
-
-        /* MAIN LAYOUT */
         .sk-main {
-          max-width: 1120px;
-          margin: 20px auto;
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 0;
-          background: #fff;
-          border-radius: 20px;
-          overflow: hidden;
-          box-shadow: 0 4px 24px rgba(0,0,0,.08);
+          max-width: 1120px; margin: 20px auto;
+          display: grid; grid-template-columns: 1fr;
+          gap: 0; background: #fff; border-radius: 20px;
+          overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08);
           border: 1px solid #ede9e0;
         }
-        @media(min-width: 768px) {
-          .sk-main { grid-template-columns: 500px 1fr; margin: 24px auto; }
-        }
-        @media(min-width: 1024px) {
-          .sk-main { grid-template-columns: 520px 1fr; }
-        }
-
-        /* GALLERY */
+        @media(min-width: 768px) { .sk-main { grid-template-columns: 500px 1fr; margin: 24px auto; } }
+        @media(min-width: 1024px) { .sk-main { grid-template-columns: 520px 1fr; } }
         .sk-gallery { background: #f9f7f4; }
         .sk-img-main {
           position: relative; aspect-ratio: 1;
-          background: #f2efe9; overflow: hidden;
-          cursor: zoom-in;
+          background: #f2efe9; overflow: hidden; cursor: zoom-in;
         }
         .sk-img-main img { transition: transform 0.4s cubic-bezier(.25,.46,.45,.94); }
         .sk-img-main:hover img { transform: scale(1.04); }
         .sk-img-main .slide-anim { animation: slideImg 0.3s ease both; }
-
-        /* Gallery nav arrows */
         .gal-arrow {
           position: absolute; top: 50%; transform: translateY(-50%);
           width: 36px; height: 36px; border-radius: 50%; border: none;
@@ -367,14 +344,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .gal-arrow:disabled { opacity: .25; cursor: not-allowed; transform: translateY(-50%); box-shadow: none; }
         .gal-arrow.left  { left: 12px; }
         .gal-arrow.right { right: 12px; }
-
-        /* Dot indicators */
         .gal-dots { position:absolute; bottom:12px; left:0; right:0; display:flex; justify-content:center; gap:5px; z-index:3; }
         .gal-dot  { width:7px; height:7px; border-radius:4px; border:none; cursor:pointer; padding:0;
                     background:rgba(255,255,255,.5); transition:all .22s; }
         .gal-dot.active { width:22px; background:#b8860b; }
-
-        /* Thumb strip */
         .sk-thumbs {
           display:flex; gap:7px; padding:12px 14px;
           background:#faf8f4; border-top:1px solid #ede9e0;
@@ -384,13 +357,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-thumbs::-webkit-scrollbar-thumb { background:#ddd; border-radius:2px; }
         .sk-thumb {
           flex-shrink:0; width:62px; height:62px; border-radius:10px; overflow:hidden;
-          border:2.5px solid transparent; cursor:pointer; transition:all .2s;
-          background:#ede9e0;
+          border:2.5px solid transparent; cursor:pointer; transition:all .2s; background:#ede9e0;
         }
         .sk-thumb.active { border-color:#b8860b; box-shadow:0 0 0 2px rgba(184,134,11,.2); }
         .sk-thumb:hover:not(.active) { border-color:#c8a060; transform:translateY(-1px); }
-
-        /* RIBBONS */
         .sk-disc-ribbon {
           position:absolute; top:14px; left:0; z-index:4;
           background:#1a1a1a; color:#fff; font-size:11px; font-weight:800;
@@ -403,30 +373,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           font-size:9.5px; font-weight:800; padding:4px 10px;
           border-radius:50px; letter-spacing:.07em; text-transform:uppercase;
         }
-
-        /* INFO PANEL */
         .sk-info { padding: 26px 24px; overflow-y: auto; }
-
         .sk-category-tag {
           font-size: 10px; font-weight: 800; letter-spacing: .13em;
           text-transform: uppercase; color: #b8860b; margin-bottom: 8px; display: block;
         }
-        .sk-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 21px; font-weight: 800; line-height: 1.35; color: #1a1a1a; margin-bottom: 8px;
-        }
+        .sk-title { font-family: 'Syne', sans-serif; font-size: 21px; font-weight: 800; line-height: 1.35; color: #1a1a1a; margin-bottom: 8px; }
         @media(min-width:768px) { .sk-title { font-size:24px; } }
         .sk-short-desc { font-size: 13.5px; color: #777; line-height: 1.7; margin-bottom: 16px; }
-
-        /* Rating */
         .sk-rating { display:flex; align-items:center; gap:8px; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid #ede9e0; }
         .sk-stars { color: #c8860a; font-size:14px; letter-spacing:2px; }
-
-        /* Price box */
         .sk-price-box {
           background: linear-gradient(135deg, #fdf9f0 0%, #faf5e6 100%);
-          border: 1px solid #e8d898; border-radius: 14px;
-          padding: 16px 18px; margin-bottom: 20px;
+          border: 1px solid #e8d898; border-radius: 14px; padding: 16px 18px; margin-bottom: 20px;
         }
         .sk-price-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
         .sk-price-main {
@@ -440,143 +399,91 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: 800;
           padding: 4px 12px; border-radius: 50px; margin-top: 8px; border: 1px solid #c8e6c9;
         }
-
-        /* ── SIZE BOXES ── */
-        .sk-section-title {
-          font-size: 13px; font-weight: 800; color: #1a1a1a;
-          margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
-        }
+        .sk-section-title { font-size: 13px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
         .sk-section-title .selected-val { color: #b8860b; font-weight: 700; }
-
         .sk-size-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-
         .sk-size-box {
-          position: relative;
-          min-width: 72px; padding: 10px 14px;
-          border: 2px solid #e5e0d8; border-radius: 12px;
-          background: #fff; cursor: pointer;
-          transition: all .2s cubic-bezier(.34,1.56,.64,1);
-          text-align: center;
+          position: relative; min-width: 72px; padding: 10px 14px;
+          border: 2px solid #e5e0d8; border-radius: 12px; background: #fff; cursor: pointer;
+          transition: all .2s cubic-bezier(.34,1.56,.64,1); text-align: center;
           display: flex; flex-direction: column; align-items: center; gap: 3px;
-          font-family: inherit;
-          outline: none;
+          font-family: inherit; outline: none;
         }
         .sk-size-box:hover:not(:disabled):not(.selected) {
-          border-color: #c8a060;
-          background: #fdf9f0;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(184,134,11,.14);
+          border-color: #c8a060; background: #fdf9f0;
+          transform: translateY(-2px); box-shadow: 0 4px 12px rgba(184,134,11,.14);
         }
         .sk-size-box.selected {
-          border-color: #b8860b;
-          background: linear-gradient(135deg, #fdf9f0, #faf3dd);
+          border-color: #b8860b; background: linear-gradient(135deg, #fdf9f0, #faf3dd);
           box-shadow: 0 0 0 3px rgba(184,134,11,.18), 0 4px 12px rgba(184,134,11,.14);
           transform: translateY(-1px);
         }
-        .sk-size-box:disabled {
-          opacity: .35; cursor: not-allowed; transform: none; box-shadow: none;
-        }
-        .sk-size-box .size-label {
-          font-size: 13.5px; font-weight: 800; color: #1a1a1a;
-        }
+        .sk-size-box:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
+        .sk-size-box .size-label { font-size: 13.5px; font-weight: 800; color: #1a1a1a; }
         .sk-size-box.selected .size-label { color: #b8860b; }
-        .sk-size-box .size-price {
-          font-size: 11px; color: #999; font-weight: 600;
-        }
+        .sk-size-box .size-price { font-size: 11px; color: #999; font-weight: 600; }
         .sk-size-box.selected .size-price { color: #c8960c; }
-        .sk-size-box .size-oos {
-          font-size: 9px; color: #ddd; font-weight: 600;
-        }
-        /* Selected checkmark on size box */
+        .sk-size-box .size-oos { font-size: 9px; color: #ddd; font-weight: 600; }
         .sk-size-box .size-check {
-          position: absolute; top: -6px; right: -6px;
-          width: 16px; height: 16px; border-radius: 50%;
-          background: #b8860b; color: #fff;
-          font-size: 9px; font-weight: 900;
+          position: absolute; top: -6px; right: -6px; width: 16px; height: 16px;
+          border-radius: 50%; background: #b8860b; color: #fff; font-size: 9px; font-weight: 900;
           display: flex; align-items: center; justify-content: center;
-          animation: checkIn .25s ease;
-          box-shadow: 0 2px 6px rgba(184,134,11,.4);
+          animation: checkIn .25s ease; box-shadow: 0 2px 6px rgba(184,134,11,.4);
         }
-
-        /* ── COLOR DROPDOWN (like the screenshot) ── */
         .sk-color-dropdown-wrap { position: relative; margin-bottom: 20px; }
         .sk-color-trigger {
-          width: 100%; padding: 12px 16px;
-          border: 2px solid #e5e0d8; border-radius: 12px;
-          background: #fff; cursor: pointer;
-          display: flex; align-items: center; gap: 12px;
-          transition: all .2s; font-family: inherit;
-          outline: none;
+          width: 100%; padding: 12px 16px; border: 2px solid #e5e0d8; border-radius: 12px;
+          background: #fff; cursor: pointer; display: flex; align-items: center; gap: 12px;
+          transition: all .2s; font-family: inherit; outline: none;
         }
-        .sk-color-trigger:hover, .sk-color-trigger.open {
-          border-color: #b8860b;
-          box-shadow: 0 0 0 3px rgba(184,134,11,.12);
-        }
-        .sk-color-trigger .color-swatch {
-          width: 26px; height: 26px; border-radius: 8px;
-          border: 2px solid rgba(0,0,0,.1); flex-shrink: 0;
-          transition: transform .2s;
-        }
+        .sk-color-trigger:hover, .sk-color-trigger.open { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
+        .sk-color-trigger .color-swatch { width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; transition: transform .2s; }
         .sk-color-trigger:hover .color-swatch { transform: scale(1.1); }
         .sk-color-trigger .color-name { font-size: 14px; font-weight: 700; color: #1a1a1a; flex: 1; text-align: left; }
         .sk-color-trigger .color-count { font-size: 12px; color: #aaa; font-weight: 500; }
-        .sk-color-trigger .chevron {
-          width: 18px; height: 18px; color: #aaa;
-          transition: transform .25s; flex-shrink: 0;
-        }
+        .sk-color-trigger .chevron { width: 18px; height: 18px; color: #aaa; transition: transform .25s; flex-shrink: 0; }
         .sk-color-trigger.open .chevron { transform: rotate(180deg); }
-
-        /* Dropdown panel */
         .sk-color-panel {
           position: absolute; top: calc(100% + 6px); left: 0; right: 0;
           background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
-          box-shadow: 0 8px 32px rgba(0,0,0,.12); z-index: 50;
-          overflow: hidden;
-          animation: dropDown .22s cubic-bezier(0.16,1,0.3,1) both;
-          transform-origin: top;
+          box-shadow: 0 8px 32px rgba(0,0,0,.12); z-index: 50; overflow: hidden;
+          animation: dropDown .22s cubic-bezier(0.16,1,0.3,1) both; transform-origin: top;
         }
         .sk-color-option {
-          width: 100%; padding: 12px 16px;
-          border: none; background: none; cursor: pointer;
-          display: flex; align-items: center; gap: 12px;
-          transition: background .15s; font-family: inherit;
-          text-align: left;
+          width: 100%; padding: 12px 16px; border: none; background: none; cursor: pointer;
+          display: flex; align-items: center; gap: 12px; transition: background .15s;
+          font-family: inherit; text-align: left;
         }
         .sk-color-option:hover { background: #fdf9f0; }
         .sk-color-option.selected { background: linear-gradient(135deg, #fdf9f0, #faf3dd); }
-        .sk-color-option .opt-swatch {
-          width: 22px; height: 22px; border-radius: 6px;
-          border: 2px solid rgba(0,0,0,.1); flex-shrink: 0;
-        }
+        .sk-color-option .opt-swatch { width: 22px; height: 22px; border-radius: 6px; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; }
         .sk-color-option .opt-name { font-size: 13.5px; font-weight: 600; color: #1a1a1a; flex: 1; }
         .sk-color-option.selected .opt-name { color: #b8860b; font-weight: 700; }
-        .sk-color-option .opt-check {
-          width: 18px; height: 18px; border-radius: 50%;
-          background: #b8860b; color: #fff; font-size: 10px;
-          display: flex; align-items: center; justify-content: center;
-          animation: checkIn .2s ease;
-        }
+        .sk-color-option .opt-check { width: 18px; height: 18px; border-radius: 50%; background: #b8860b; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; animation: checkIn .2s ease; }
         .sk-color-option + .sk-color-option { border-top: 1px solid #f0ede8; }
 
-        /* ── STOCK ── */
+        /* ── STOCK INDICATOR ── */
         .sk-stock {
           display: flex; align-items: center; gap: 8px;
           font-size: 13px; font-weight: 700; margin-bottom: 16px;
           padding: 10px 14px; border-radius: 10px;
         }
-        .sk-stock.in-stock   { background: #f0fdf4; color: #15803d; }
-        .sk-stock.low-stock  { background: #fff7ed; color: #c2410c; }
-        .sk-stock.oos        { background: #fff5f5; color: #dc2626; }
+        .sk-stock.in-stock  { background: #f0fdf4; color: #15803d; }
+        .sk-stock.low-stock { background: #fff7ed; color: #c2410c; }
+        .sk-stock.oos       { background: #fff5f5; color: #dc2626; }
         .sk-stock-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
-        /* ── QTY ── */
+        /* ── SELECT PROMPT (new) ── */
+        .sk-select-prompt {
+          display: flex; align-items: center; gap: 8px;
+          font-size: 13px; font-weight: 600; color: #b8860b;
+          padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
+          background: #fdf9f0; border: 1.5px solid #e8d898;
+        }
+
         .sk-qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
         .sk-qty-label { font-size: 13px; font-weight: 700; color: #555; }
-        .sk-qty-box {
-          display: flex; align-items: center;
-          border: 2px solid #e5e0d8; border-radius: 12px; overflow: hidden;
-          transition: border-color .2s;
-        }
+        .sk-qty-box { display: flex; align-items: center; border: 2px solid #e5e0d8; border-radius: 12px; overflow: hidden; transition: border-color .2s; }
         .sk-qty-box:focus-within { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
         .sk-qty-btn {
           width: 42px; height: 42px; background: #faf8f4; border: none;
@@ -587,181 +494,71 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-qty-btn:hover:not(:disabled) { background: #ede9e0; color: #b8860b; }
         .sk-qty-btn:active:not(:disabled) { transform: scale(0.9); }
         .sk-qty-btn:disabled { opacity: .3; cursor: not-allowed; }
-        .sk-qty-num {
-          width: 50px; text-align: center; font-size: 16px; font-weight: 800;
-          border-left: 2px solid #e5e0d8; border-right: 2px solid #e5e0d8;
-          height: 42px; line-height: 42px; color: #1a1a1a; font-family: 'Syne', sans-serif;
-        }
+        .sk-qty-num { width: 50px; text-align: center; font-size: 16px; font-weight: 800; border-left: 2px solid #e5e0d8; border-right: 2px solid #e5e0d8; height: 42px; line-height: 42px; color: #1a1a1a; font-family: 'Syne', sans-serif; }
         .sk-qty-total { font-size: 13px; color: #555; margin-left: 4px; }
         .sk-qty-total strong { color: #1a1a1a; font-weight: 800; }
-
-        /* ── CTAs ── */
         .sk-cta-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-
         .sk-btn-cart {
-          width: 100%; padding: 15px;
-          background: #1a1a1a; border: 2.5px solid #1a1a1a;
-          border-radius: 13px; font-size: 15px; font-weight: 800;
-          color: #fff; cursor: pointer; font-family: inherit;
-          display: flex; align-items: center; justify-content: center; gap: 9px;
-          transition: all .22s; letter-spacing: .01em;
-          position: relative; overflow: hidden;
+          width: 100%; padding: 15px; background: #1a1a1a; border: 2.5px solid #1a1a1a;
+          border-radius: 13px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer;
+          font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 9px;
+          transition: all .22s; position: relative; overflow: hidden;
         }
-        .sk-btn-cart::after {
-          content:''; position:absolute; inset:0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
-          transform: translateX(-100%); transition: transform .5s;
-        }
+        .sk-btn-cart::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); transform: translateX(-100%); transition: transform .5s; }
         .sk-btn-cart:hover:not(:disabled)::after { transform: translateX(100%); }
         .sk-btn-cart:hover:not(:disabled) { background: #333; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
         .sk-btn-cart:active:not(:disabled) { transform: scale(0.99); }
         .sk-btn-cart:disabled { opacity: .4; cursor: not-allowed; }
-        .sk-btn-cart.success {
-          background: #15803d; border-color: #15803d;
-          animation: popIn .35s ease;
-        }
-
+        .sk-btn-cart.success { background: #15803d; border-color: #15803d; animation: popIn .35s ease; }
         .sk-btn-buy {
-          width: 100%; padding: 14px;
-          background: linear-gradient(135deg, #d4a020 0%, #b8860b 100%);
-          border: none; border-radius: 13px; font-size: 15px; font-weight: 800;
-          color: #fff; cursor: pointer; font-family: inherit;
-          display: flex; align-items: center; justify-content: center; gap: 9px;
-          transition: all .22s;
-          box-shadow: 0 4px 18px rgba(184,134,11,.35);
+          width: 100%; padding: 14px; background: linear-gradient(135deg, #d4a020 0%, #b8860b 100%);
+          border: none; border-radius: 13px; font-size: 15px; font-weight: 800; color: #fff;
+          cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 9px;
+          transition: all .22s; box-shadow: 0 4px 18px rgba(184,134,11,.35);
         }
-        .sk-btn-buy:hover:not(:disabled) {
-          box-shadow: 0 8px 28px rgba(184,134,11,.5);
-          transform: translateY(-2px);
-        }
+        .sk-btn-buy:hover:not(:disabled) { box-shadow: 0 8px 28px rgba(184,134,11,.5); transform: translateY(-2px); }
         .sk-btn-buy:active:not(:disabled) { transform: scale(0.99); }
         .sk-btn-buy:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-
         .sk-btn-wish {
-          width: 100%; padding: 12px;
-          background: #fff; border: 2px solid #e5e0d8;
-          border-radius: 13px; font-size: 14px; font-weight: 700;
-          color: #666; cursor: pointer; font-family: inherit;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; padding: 12px; background: #fff; border: 2px solid #e5e0d8;
+          border-radius: 13px; font-size: 14px; font-weight: 700; color: #666; cursor: pointer;
+          font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px;
           transition: all .2s;
         }
         .sk-btn-wish:hover { border-color: #c8a060; color: #8b6914; background: #fdf9f0; }
         .sk-btn-wish.active { border-color: #ef4444; color: #dc2626; background: #fff5f5; }
-
-        /* TRUST BADGES */
-        .sk-badges {
-          display: flex; align-items: center; justify-content: center; gap: 12px;
-          padding: 14px 0; flex-wrap: wrap;
-          border-top: 1px solid #ede9e0; border-bottom: 1px solid #ede9e0;
-          margin-bottom: 18px;
-        }
-        .sk-badge {
-          display: flex; align-items: center; gap: 5px;
-          font-size: 11.5px; color: #777; font-weight: 600;
-          padding: 5px 10px; border-radius: 8px; background: #faf8f4;
-          border: 1px solid #ede9e0;
-        }
-
-        /* SELLER BOX */
-        .sk-seller {
-          background: #faf8f4; border: 1px solid #ede9e0;
-          border-radius: 13px; padding: 14px; margin-bottom: 16px;
-        }
+        .sk-badges { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 0; flex-wrap: wrap; border-top: 1px solid #ede9e0; border-bottom: 1px solid #ede9e0; margin-bottom: 18px; }
+        .sk-badge { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #777; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: #faf8f4; border: 1px solid #ede9e0; }
+        .sk-seller { background: #faf8f4; border: 1px solid #ede9e0; border-radius: 13px; padding: 14px; margin-bottom: 16px; }
         .sk-seller-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
         .sk-seller-row + .sk-seller-row { border-top: 1px solid #f0ede8; }
         .sk-seller-key { color: #888; }
         .sk-seller-val { font-weight: 700; color: #8b6914; }
         .sk-seller-val.green { color: #15803d; }
-
-        /* SELECTION SUMMARY */
-        .sk-summary-bar {
-          background: linear-gradient(135deg, #fdf9f0, #faf3dd);
-          border: 1.5px solid #e8d898; border-radius: 11px;
-          padding: 10px 14px; margin-bottom: 16px;
-          font-size: 13px; font-weight: 700; color: #8b6914;
-          display: flex; align-items: center; gap: 8px;
-        }
-
-        /* OOS */
-        .sk-oos {
-          background: #fff5f5; border: 1.5px solid #fecaca;
-          border-radius: 13px; padding: 14px; text-align: center;
-          color: #dc2626; font-size: 14px; font-weight: 700; margin-bottom: 18px;
-        }
-
-        /* TABS */
+        .sk-summary-bar { background: linear-gradient(135deg, #fdf9f0, #faf3dd); border: 1.5px solid #e8d898; border-radius: 11px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #8b6914; display: flex; align-items: center; gap: 8px; }
+        .sk-oos { background: #fff5f5; border: 1.5px solid #fecaca; border-radius: 13px; padding: 14px; text-align: center; color: #dc2626; font-size: 14px; font-weight: 700; margin-bottom: 18px; }
         .tab-section { max-width: 1120px; margin: 0 auto 16px; }
-        .sk-tab-bar {
-          display: flex; background: #fff;
-          border-bottom: 2px solid #ede9e0; border-radius: 0;
-          overflow: hidden;
-        }
-        .sk-tab-btn {
-          flex: 1; padding: 14px 10px; font-size: 13.5px; font-weight: 700;
-          cursor: pointer; background: none; border: none;
-          border-bottom: 3px solid transparent; color: #aaa;
-          transition: all .2s; font-family: inherit; margin-bottom: -2px;
-        }
+        .sk-tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ede9e0; border-radius: 0; overflow: hidden; }
+        .sk-tab-btn { flex: 1; padding: 14px 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; transition: all .2s; font-family: inherit; margin-bottom: -2px; }
         .sk-tab-btn.active { color: #b8860b; border-bottom-color: #b8860b; background: #fdf9f0; }
         .sk-tab-btn:hover:not(.active) { color: #1a1a1a; background: #f5f2ec; }
-
-        .sk-tab-content {
-          background: #fff; padding: 24px 20px;
-          font-size: 14px; color: #555; line-height: 1.85;
-          animation: fadeUp .22s ease; border-bottom: 1px solid #ede9e0;
-        }
-        .sk-ship-row {
-          display: flex; gap: 14px; padding: 14px 0;
-          border-bottom: 1px solid #f0ede8;
-        }
+        .sk-tab-content { background: #fff; padding: 24px 20px; font-size: 14px; color: #555; line-height: 1.85; animation: fadeUp .22s ease; border-bottom: 1px solid #ede9e0; }
+        .sk-ship-row { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0ede8; }
         .sk-ship-row:last-child { border-bottom: none; }
-
-        /* MORE PRODUCTS */
         .sk-more-wrap { max-width: 1120px; margin: 24px auto 40px; padding: 0 12px; }
-        .sk-more-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-          gap: 12px;
-        }
-        .sk-more-card {
-          background: #fff; border: 1.5px solid #ede9e0; border-radius: 14px;
-          overflow: hidden; text-decoration: none; color: inherit;
-          transition: all .22s cubic-bezier(.34,1.56,.64,1);
-        }
-        .sk-more-card:hover {
-          border-color: #b8860b; transform: translateY(-4px);
-          box-shadow: 0 10px 28px rgba(0,0,0,.1);
-        }
+        .sk-more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
+        .sk-more-card { background: #fff; border: 1.5px solid #ede9e0; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; transition: all .22s cubic-bezier(.34,1.56,.64,1); }
+        .sk-more-card:hover { border-color: #b8860b; transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
         .sk-more-img { width: 100%; aspect-ratio: 1; background: #f2efe9; position: relative; }
         .sk-more-body { padding: 11px; }
-        .sk-more-name {
-          font-size: 12.5px; line-height: 1.4; color: #1a1a1a; margin-bottom: 5px;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-          font-weight: 600;
-        }
+        .sk-more-name { font-size: 12.5px; line-height: 1.4; color: #1a1a1a; margin-bottom: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
         .sk-more-price { font-size: 14px; font-weight: 900; color: #b8860b; font-family: 'Syne', sans-serif; }
-
-        /* Color swatches row (below dropdown) */
         .sk-swatch-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
-        .sk-mini-swatch {
-          width: 30px; height: 30px; border-radius: 8px;
-          border: 2.5px solid transparent; cursor: pointer;
-          transition: all .2s cubic-bezier(.34,1.56,.64,1);
-          position: relative;
-        }
+        .sk-mini-swatch { width: 30px; height: 30px; border-radius: 8px; border: 2.5px solid transparent; cursor: pointer; transition: all .2s cubic-bezier(.34,1.56,.64,1); position: relative; }
         .sk-mini-swatch:hover { transform: scale(1.15); box-shadow: 0 3px 10px rgba(0,0,0,.2); }
-        .sk-mini-swatch.selected {
-          border-color: #b8860b;
-          box-shadow: 0 0 0 3px rgba(184,134,11,.25);
-          transform: scale(1.1);
-        }
+        .sk-mini-swatch.selected { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.25); transform: scale(1.1); }
         .sk-mini-swatch:disabled { opacity: .3; cursor: not-allowed; transform: none !important; }
-        .sk-mini-swatch .mini-check {
-          position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-          color: #fff; font-size: 12px; font-weight: 900;
-          text-shadow: 0 1px 3px rgba(0,0,0,.5);
-          animation: checkIn .2s ease;
-        }
+        .sk-mini-swatch .mini-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,.5); animation: checkIn .2s ease; }
       `}</style>
 
       {/* ── NAV ── */}
@@ -771,13 +568,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/>
           </svg>
         </Link>
-        <Link href="/" className="sk-logo">
-          Shazfa Kraft<small>Islamic Wall Art Store</small>
-        </Link>
+        <Link href="/" className="sk-logo">Shazfa Kraft<small>Islamic Wall Art Store</small></Link>
         <Link href="/cart" className="sk-cart-btn">
           <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
           </svg>
           Cart
         </Link>
@@ -785,37 +579,26 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
       {/* ── BREADCRUMB ── */}
       <nav className="sk-crumb">
-        <Link href="/">Home</Link>
-        <span>›</span>
+        <Link href="/">Home</Link><span>›</span>
         <Link href="/products">Products</Link>
-        {product.categories && (
-          <><span>›</span><Link href={`/products?category=${product.category_id}`}>{product.categories.name}</Link></>
-        )}
+        {product.categories && (<><span>›</span><Link href={`/products?category=${product.category_id}`}>{product.categories.name}</Link></>)}
         <span>›</span>
         <span style={{ color: '#1a1a1a', fontWeight: 700 }}>{product.name}</span>
       </nav>
 
-      {/* ── MAIN CARD ── */}
+      {/* ── MAIN ── */}
       <div style={{ padding: '0 12px' }}>
         <div className="sk-main page-enter">
 
-          {/* ══ GALLERY ══ */}
+          {/* ── GALLERY ── */}
           <div className="sk-gallery">
             <div className="sk-img-main">
               {allImages[selectedImage]
-                ? <Image
-                    key={selectedImage}
-                    src={colorImage || allImages[selectedImage]}
-                    alt={product.name} fill
-                    style={{ objectFit: 'cover' }}
-                    className="slide-anim"
-                    priority
-                  />
+                ? <Image key={selectedImage} src={colorImage || allImages[selectedImage]} alt={product.name} fill style={{ objectFit: 'cover' }} className="slide-anim" priority />
                 : <div style={{ width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:64 }}>📦</div>
               }
               {discount > 0 && <div className="sk-disc-ribbon">−{discount}% OFF</div>}
               {product.is_featured && <div className="sk-feat-pill">★ Featured</div>}
-
               {allImages.length > 1 && (
                 <>
                   <button className="gal-arrow left" onClick={() => setSelectedImage(p => Math.max(0, p - 1))} disabled={selectedImage === 0}>
@@ -825,14 +608,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
                   </button>
                   <div className="gal-dots">
-                    {allImages.map((_, i) => (
-                      <button key={i} className={`gal-dot${selectedImage === i ? ' active' : ''}`} onClick={() => setSelectedImage(i)} />
-                    ))}
+                    {allImages.map((_, i) => <button key={i} className={`gal-dot${selectedImage === i ? ' active' : ''}`} onClick={() => setSelectedImage(i)} />)}
                   </div>
                 </>
               )}
             </div>
-
             {allImages.length > 1 && (
               <div className="sk-thumbs">
                 {allImages.map((img, i) => (
@@ -846,7 +626,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             )}
           </div>
 
-          {/* ══ INFO PANEL ══ */}
+          {/* ── INFO PANEL ── */}
           <div className="sk-info">
             {product.categories && <span className="sk-category-tag">{product.categories.name}</span>}
             <h1 className="sk-title">{product.name}</h1>
@@ -879,12 +659,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               )}
             </div>
 
-            {/* ── SIZE BOXES ── */}
+            {/* Sizes */}
             {availableSizes.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div className="sk-section-title">
-                  Size:
-                  {selectedSize && <span className="selected-val">{selectedSize} inches</span>}
+                  Size:{selectedSize && <span className="selected-val">{selectedSize} inches</span>}
                 </div>
                 <div className="sk-size-grid">
                   {availableSizes.map(size => {
@@ -892,17 +671,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     const price = priceForSize(size)
                     const isSelected = selectedSize === size
                     return (
-                      <button
-                        key={size}
-                        className={`sk-size-box${isSelected ? ' selected' : ''}`}
-                        disabled={!available}
-                        onClick={() => handleSizeSelect(size)}
-                      >
+                      <button key={size} className={`sk-size-box${isSelected ? ' selected' : ''}`}
+                        disabled={!available} onClick={() => handleSizeSelect(size)}>
                         {isSelected && <span className="size-check">✓</span>}
                         <span className="size-label">{size}"</span>
-                        {price !== null && (
-                          <span className="size-price">₹{price.toLocaleString('en-IN')}</span>
-                        )}
+                        {price !== null && <span className="size-price">₹{price.toLocaleString('en-IN')}</span>}
                         {!available && <span className="size-oos">Out of stock</span>}
                       </button>
                     )
@@ -911,21 +684,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            {/* ── COLOR DROPDOWN (like screenshot) + mini swatches ── */}
+            {/* Colors */}
             {availableColors.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div className="sk-section-title">
-                  Color:
-                  {selectedColor && <span className="selected-val">{selectedColor}</span>}
+                  Color:{selectedColor && <span className="selected-val">{selectedColor}</span>}
                 </div>
-
-                {/* Dropdown trigger */}
                 <div className="sk-color-dropdown-wrap" ref={colorDropRef}>
-                  <button
-                    className={`sk-color-trigger${colorDropOpen ? ' open' : ''}`}
-                    onClick={() => setColorDropOpen(o => !o)}
-                    type="button"
-                  >
+                  <button className={`sk-color-trigger${colorDropOpen ? ' open' : ''}`}
+                    onClick={() => setColorDropOpen(o => !o)} type="button">
                     <span className="color-swatch" style={{ background: selectedColorHex }} />
                     <span className="color-name">{selectedColor || 'Select color'}</span>
                     {colorsCount > 1 && <span className="color-count">{colorsCount} colors</span>}
@@ -933,7 +700,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>
                     </svg>
                   </button>
-
                   {colorDropOpen && (
                     <div className="sk-color-panel">
                       {availableColors.map(color => {
@@ -941,12 +707,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                         const available = isColorAvailable(color)
                         const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
                         return (
-                          <button
-                            key={color}
-                            className={`sk-color-option${isSelected ? ' selected' : ''}`}
-                            disabled={!available}
-                            onClick={() => handleColorSelect(color)}
-                          >
+                          <button key={color} className={`sk-color-option${isSelected ? ' selected' : ''}`}
+                            disabled={!available} onClick={() => handleColorSelect(color)}>
                             <span className="opt-swatch" style={{ background: hex, opacity: available ? 1 : .4 }} />
                             <span className="opt-name">{color}{!available ? ' (OOS)' : ''}</span>
                             {isSelected && <span className="opt-check">✓</span>}
@@ -956,23 +718,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     </div>
                   )}
                 </div>
-
-                {/* Quick swatch row below the dropdown */}
+                {/* Quick swatch row */}
                 <div className="sk-swatch-row">
                   {availableColors.map(color => {
                     const hex = COLOR_HEX[color.toLowerCase()] || '#ccc'
                     const available = isColorAvailable(color)
                     const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
                     return (
-                      <button
-                        key={color}
-                        className={`sk-mini-swatch${isSelected ? ' selected' : ''}`}
-                        disabled={!available}
-                        title={color}
+                      <button key={color} className={`sk-mini-swatch${isSelected ? ' selected' : ''}`}
+                        disabled={!available} title={color}
                         onClick={() => handleColorSelect(color)}
-                        style={{ background: hex }}
-                        type="button"
-                      >
+                        style={{ background: hex }} type="button">
                         {isSelected && <span className="mini-check">✓</span>}
                       </button>
                     )
@@ -991,39 +747,31 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            {/* Stock */}
-            <div className={`sk-stock${stock <= 0 ? ' oos' : stock <= 10 ? ' low-stock' : ' in-stock'}`}>
+            {/* ── FIX: Smart stock indicator ── */}
+            <div className={`sk-stock ${stockLabel.cls}`}>
               <div className="sk-stock-dot" style={{
-                background: stock <= 0 ? '#dc2626' : stock <= 10 ? '#ea580c' : '#15803d',
-                boxShadow: `0 0 0 3px ${stock <= 0 ? 'rgba(220,38,38,.2)' : stock <= 10 ? 'rgba(234,88,12,.2)' : 'rgba(21,128,61,.2)'}`,
+                background: stockLabel.cls === 'oos' ? '#dc2626' : stockLabel.cls === 'low-stock' ? '#ea580c' : '#15803d',
+                boxShadow: `0 0 0 3px ${stockLabel.cls === 'oos' ? 'rgba(220,38,38,.2)' : stockLabel.cls === 'low-stock' ? 'rgba(234,88,12,.2)' : 'rgba(21,128,61,.2)'}`,
               }} />
-              {stock <= 0
-                ? 'Currently Unavailable'
-                : stock <= 10
-                  ? `Only ${stock} left — order soon!`
-                  : `In Stock · ${stock} units available`}
+              {stockLabel.text}
             </div>
 
-            {/* Qty + CTA */}
-            {stock > 0 && (
+            {/* Qty + CTA — shown unless truly OOS */}
+            {stockLabel.cls !== 'oos' && (
               <>
                 <div className="sk-qty-row">
                   <span className="sk-qty-label">Qty:</span>
                   <div className="sk-qty-box">
                     <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.max(1, p - 1))} disabled={quantity <= 1}>−</button>
                     <div className="sk-qty-num">{quantity}</div>
-                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(stock, p + 1))} disabled={quantity >= stock}>+</button>
+                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(Math.max(stock,1), p + 1))} disabled={quantity >= Math.max(stock,1)}>+</button>
                   </div>
                   <span className="sk-qty-total">
                     Total: <strong>₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits:0 })}</strong>
                   </span>
                 </div>
-
                 <div className="sk-cta-stack">
-                  <button
-                    onClick={handleAddToCart}
-                    className={`sk-btn-cart${addedToCart ? ' success' : ''}`}
-                  >
+                  <button onClick={handleAddToCart} className={`sk-btn-cart${addedToCart ? ' success' : ''}`}>
                     {addedToCart ? (
                       <>
                         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ animation:'checkIn .3s ease' }}>
@@ -1034,42 +782,32 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     ) : (
                       <>
                         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                         </svg>
                         Add to Cart · ₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits:0 })}
                       </>
                     )}
                   </button>
-
                   <button className="sk-btn-buy" onClick={() => { handleAddToCart(); router.push('/checkout') }}>
                     <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                     Buy Now
                   </button>
-
                   <button className={`sk-btn-wish${isWishlisted ? ' active' : ''}`} onClick={() => setIsWishlisted(p => !p)}>
                     <svg width="16" height="16" fill={isWishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                     </svg>
                     {isWishlisted ? '♥ Saved to Wishlist' : 'Add to Wishlist'}
                   </button>
                 </div>
               </>
             )}
-
-            {stock <= 0 && <div className="sk-oos">⚠️ Currently Out of Stock</div>}
+            {stockLabel.cls === 'oos' && <div className="sk-oos">⚠️ Currently Out of Stock</div>}
 
             {/* Trust badges */}
             <div className="sk-badges">
-              {[
-                { i:'🔒', l:'Secure Payment' },
-                { i:'🚚', l:'Free Ship ₹499+' },
-                { i:'↩️', l:'7-Day Returns' },
-                { i:'✅', l:'Authentic' },
-              ].map(b => (
+              {[{i:'🔒',l:'Secure Payment'},{i:'🚚',l:'Free Ship ₹499+'},{i:'↩️',l:'7-Day Returns'},{i:'✅',l:'Authentic'}].map(b => (
                 <div key={b.l} className="sk-badge"><span>{b.i}</span><span>{b.l}</span></div>
               ))}
             </div>
@@ -1077,13 +815,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             {/* Seller box */}
             <div className="sk-seller">
               {[
-                { k:'Sold by',         v:'Shazfa Kraft',       cls:'' },
-                { k:'Dispatches from', v:'Shazfa Kraft',       cls:'' },
-                { k:'Est. delivery',   v:'3–7 business days',  cls:'green' },
+                {k:'Sold by',v:'Shazfa Kraft',cls:''},
+                {k:'Dispatches from',v:'Shazfa Kraft',cls:''},
+                {k:'Est. delivery',v:'3–7 business days',cls:'green'},
               ].map(r => (
                 <div key={r.k} className="sk-seller-row">
                   <span className="sk-seller-key">{r.k}</span>
-                  <span className={`sk-seller-val${r.cls ? ' '+r.cls : ''}`}>{r.v}</span>
+                  <span className={`sk-seller-val${r.cls?' '+r.cls:''}`}>{r.v}</span>
                 </div>
               ))}
             </div>
@@ -1102,7 +840,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         <div className="sk-tab-bar" style={{ borderRadius:'14px 14px 0 0', marginTop:16, overflow:'hidden' }}>
           {(['description','shipping','reviews'] as const).map(tab => (
             <button key={tab} className={`sk-tab-btn${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-              {tab === 'description' ? '📄 Description' : tab === 'shipping' ? '🚚 Shipping' : '⭐ Reviews'}
+              {tab==='description'?'📄 Description':tab==='shipping'?'🚚 Shipping':'⭐ Reviews'}
             </button>
           ))}
         </div>
@@ -1115,10 +853,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           {activeTab === 'shipping' && (
             <div>
               {[
-                { i:'🚚', t:'Free Shipping', b:'Available on all orders above ₹499. Delivered within 3–7 business days.' },
-                { i:'⚡', t:'Express Delivery', b:'Next-day delivery in select cities for an additional charge.' },
-                { i:'↩️', t:'Return Policy', b:'Returns accepted within 7 days of delivery. Item must be unused and in original packaging.' },
-                { i:'💳', t:'Prepaid Discount', b:'Get an extra 5% off when you pay online at checkout.' },
+                {i:'🚚',t:'Free Shipping',b:'Available on all orders above ₹499. Delivered within 3–7 business days.'},
+                {i:'⚡',t:'Express Delivery',b:'Next-day delivery in select cities for an additional charge.'},
+                {i:'↩️',t:'Return Policy',b:'Returns accepted within 7 days of delivery. Item must be unused and in original packaging.'},
+                {i:'💳',t:'Prepaid Discount',b:'Get an extra 5% off when you pay online at checkout.'},
               ].map(s => (
                 <div key={s.t} className="sk-ship-row">
                   <div style={{ fontSize:22, flexShrink:0, width:30, textAlign:'center' }}>{s.i}</div>
@@ -1143,9 +881,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
       {/* ── MORE PRODUCTS ── */}
       {moreProducts.length > 0 && (
         <section className="sk-more-wrap">
-          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, marginBottom:16, color:'#1a1a1a' }}>
-            More Products
-          </h2>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, marginBottom:16, color:'#1a1a1a' }}>More Products</h2>
           <div className="sk-more-grid">
             {moreProducts.map(item => (
               <Link key={item.id} href={`/products/${item.slug}`} className="sk-more-card">
@@ -1156,7 +892,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 </div>
                 <div className="sk-more-body">
                   <p className="sk-more-name">{item.name}</p>
-                  <p className="sk-more-price">₹{Number(item.price || 0).toLocaleString('en-IN')}</p>
+                  <p className="sk-more-price">₹{Number(item.price||0).toLocaleString('en-IN')}</p>
                 </div>
               </Link>
             ))}

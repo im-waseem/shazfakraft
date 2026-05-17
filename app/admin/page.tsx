@@ -168,7 +168,7 @@ function Skeleton({ h = 120, delay = 0 }: { h?: number; delay?: number }) {
 function StatusPill({ dot, label, glow }: { dot: string; label: string; glow: boolean }) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-100 rounded-full shadow-sm">
-      <div className="w-2 h-2 rounded-full flex-shrink-0"
+      <div className="w-2 h-2 rounded-full shrink-0"
         style={{ background: dot, boxShadow: glow ? `0 0 6px ${dot}80` : 'none' }} />
       <span className="text-xs font-semibold text-stone-600 whitespace-nowrap">{label}</span>
     </div>
