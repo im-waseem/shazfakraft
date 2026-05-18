@@ -2,401 +2,328 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-/* ─────────────────────────────────────────
-   Types
-───────────────────────────────────────── */
+/* ─── Types ───────────────────────────────────────────────────────────────── */
 interface OrderItem {
-  name: string
-  quantity: number
-  price: number
-  total?: number
-  image_url?: string
+  name: string; quantity: number; price: number; total?: number; image_url?: string
 }
 interface Customer {
-  first_name: string | null
-  last_name: string | null
-  email: string | null
-  phone: string | null
+  first_name: string | null; last_name: string | null; email: string | null; phone: string | null
 }
 interface Order {
-  id: string
-  order_number: string
-  total_amount: number
-  status: string
-  payment_status: string
-  fulfillment_status: string
-  created_at: string
-  shipping_address: any
-  items: OrderItem[]
-  customers: Customer | Customer[] | null
+  id: string; order_number: string; total_amount: number; status: string
+  payment_status: string; fulfillment_status: string; created_at: string
+  shipping_address: any; items: OrderItem[]; customers: Customer | Customer[] | null
 }
 
-/* ─────────────────────────────────────────
-   Helpers
-───────────────────────────────────────── */
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n)
-
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-
 const ageDays = (s: string) =>
   Math.floor((Date.now() - new Date(s).getTime()) / 86_400_000)
 
-/* Status colour maps */
-const ORDER_STATUS_CFG: Record<string, { bg: string; text: string; dot: string }> = {
-  pending:    { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24', dot: '#f59e0b' },
-  confirmed:  { bg: 'rgba(56,189,248,.10)',  text: '#38bdf8', dot: '#0ea5e9' },
-  processing: { bg: 'rgba(167,139,250,.12)', text: '#a78bfa', dot: '#8b5cf6' },
-  shipped:    { bg: 'rgba(34,211,170,.10)',  text: '#2dd4bf', dot: '#14b8a6' },
-  delivered:  { bg: 'rgba(52,211,153,.10)',  text: '#34d399', dot: '#10b981' },
-  cancelled:  { bg: 'rgba(248,113,113,.10)', text: '#f87171', dot: '#ef4444' },
-  refunded:   { bg: 'rgba(148,163,184,.08)', text: '#94a3b8', dot: '#64748b' },
+/* ─── Status configs (sand-palette friendly) ──────────────────────────────── */
+const ORDER_CFG: Record<string, { bg: string; text: string; dot: string }> = {
+  pending:    { bg: 'rgba(217,119,6,.1)',   text: '#b45309', dot: '#d97706' },
+  confirmed:  { bg: 'rgba(37,99,235,.08)',  text: '#1d4ed8', dot: '#3b82f6' },
+  processing: { bg: 'rgba(124,58,237,.08)', text: '#6d28d9', dot: '#8b5cf6' },
+  shipped:    { bg: 'rgba(8,145,178,.08)',  text: '#0e7490', dot: '#06b6d4' },
+  delivered:  { bg: 'rgba(22,163,74,.09)',  text: '#15803d', dot: '#16a34a' },
+  cancelled:  { bg: 'rgba(220,38,38,.08)',  text: '#b91c1c', dot: '#dc2626' },
+  refunded:   { bg: 'rgba(107,114,128,.08)',text: '#6b7280', dot: '#9ca3af' },
 }
 const PAYMENT_CFG: Record<string, { bg: string; text: string; dot: string }> = {
-  pending:    { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24', dot: '#f59e0b' },
-  authorized: { bg: 'rgba(56,189,248,.10)',  text: '#38bdf8', dot: '#0ea5e9' },
-  captured:   { bg: 'rgba(52,211,153,.10)',  text: '#34d399', dot: '#10b981' },
-  failed:     { bg: 'rgba(248,113,113,.10)', text: '#f87171', dot: '#ef4444' },
-  refunded:   { bg: 'rgba(148,163,184,.08)', text: '#94a3b8', dot: '#64748b' },
+  pending:    { bg: 'rgba(217,119,6,.1)',   text: '#b45309', dot: '#d97706' },
+  authorized: { bg: 'rgba(37,99,235,.08)',  text: '#1d4ed8', dot: '#3b82f6' },
+  captured:   { bg: 'rgba(22,163,74,.09)',  text: '#15803d', dot: '#16a34a' },
+  failed:     { bg: 'rgba(220,38,38,.08)',  text: '#b91c1c', dot: '#dc2626' },
+  refunded:   { bg: 'rgba(107,114,128,.08)',text: '#6b7280', dot: '#9ca3af' },
 }
 const FULFIL_CFG: Record<string, { bg: string; text: string; dot: string }> = {
-  unfulfilled:         { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24', dot: '#f59e0b' },
-  partially_fulfilled: { bg: 'rgba(167,139,250,.12)', text: '#a78bfa', dot: '#8b5cf6' },
-  fulfilled:           { bg: 'rgba(52,211,153,.10)',  text: '#34d399', dot: '#10b981' },
-  returned:            { bg: 'rgba(248,113,113,.10)', text: '#f87171', dot: '#ef4444' },
+  unfulfilled:         { bg: 'rgba(217,119,6,.1)',   text: '#b45309', dot: '#d97706' },
+  partially_fulfilled: { bg: 'rgba(124,58,237,.08)', text: '#6d28d9', dot: '#8b5cf6' },
+  fulfilled:           { bg: 'rgba(22,163,74,.09)',  text: '#15803d', dot: '#16a34a' },
+  returned:            { bg: 'rgba(220,38,38,.08)',  text: '#b91c1c', dot: '#dc2626' },
 }
 
-const badge = (cfg: Record<string, any>, val: string) => {
-  const c = cfg[val] ?? { bg: 'rgba(255,255,255,.06)', text: '#94a3b8', dot: '#64748b' }
+function StatusBadge({ cfg, val }: { cfg: Record<string, any>; val: string }) {
+  const c = cfg[val] ?? { bg: 'var(--sand-100)', text: 'var(--sand-500)', dot: 'var(--sand-300)' }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 10px', borderRadius: 7,
-      fontSize: 11, fontWeight: 700, letterSpacing: '.03em',
-      background: c.bg, color: c.text,
-      whiteSpace: 'nowrap',
+      padding: '3px 10px', borderRadius: 6,
+      fontSize: 11, fontWeight: 700, letterSpacing: '.02em',
+      background: c.bg, color: c.text, whiteSpace: 'nowrap',
     }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.dot, flexShrink: 0 }}/>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
       {val.replace(/_/g, ' ')}
     </span>
   )
 }
 
-/* ─────────────────────────────────────────
-   CSS
-───────────────────────────────────────── */
+/* ─── CSS ─────────────────────────────────────────────────────────────────── */
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
 
-  .ord-root {
-    min-height: 100vh;
-    background: #020409;
-    color: #e2e8f0;
-    font-family: 'DM Sans', system-ui, sans-serif;
-    position: relative; overflow-x: hidden;
+  :root {
+    --sand-50:  #faf8f5;
+    --sand-100: #f3f0ea;
+    --sand-200: #e8e3d8;
+    --sand-300: #d4cdbf;
+    --sand-400: #b5ab98;
+    --sand-500: #958a78;
+    --sand-600: #756c5d;
+    --sand-700: #524d43;
+    --sand-800: #322f28;
+    --ink:      #14120e;
+    --accent:   #c8622a;
+    --accent-lite: rgba(200,98,42,.1);
+    --green:    #16a34a;
+    --red:      #dc2626;
+    --radius:   10px;
+    --font: 'Instrument Sans', system-ui, sans-serif;
+    --serif: 'Instrument Serif', Georgia, serif;
   }
 
-  /* Orbs */
-  .ord-orb {
-    position: fixed; pointer-events: none; z-index: 0;
-    border-radius: 50%; filter: blur(110px); opacity: .22;
-  }
-  .ord-orb-1 { width: 650px; height: 650px; background: radial-gradient(circle,#4c1d95,transparent 70%); top:-200px; right:-120px; }
-  .ord-orb-2 { width: 500px; height: 500px; background: radial-gradient(circle,#0f172a,#1e1b4b 60%,transparent); bottom:0; left:-150px; }
-
-  .ord-inner { max-width: 1100px; margin: 0 auto; padding: 36px 28px 60px; position: relative; z-index: 1; }
-
-  /* Animations */
-  @keyframes ord-up   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes ord-in   { from{opacity:0;transform:scale(.97)}       to{opacity:1;transform:scale(1)} }
-  @keyframes ord-fade { from{opacity:0}                            to{opacity:1} }
-  @keyframes ord-spin { to{transform:rotate(360deg)} }
-  @keyframes ord-pulse{ 0%,100%{opacity:1} 50%{opacity:.4} }
-  @keyframes ord-skel {
-    0%   { background-position:200% 0; }
-    100% { background-position:-200% 0; }
-  }
-  .a-up   { animation: ord-up   .42s cubic-bezier(.16,1,.3,1) both; }
-  .a-in   { animation: ord-in   .38s cubic-bezier(.16,1,.3,1) both; }
-  .a-fade { animation: ord-fade .5s ease both; }
-
-  /* Scrollbar */
-  .ord-root ::-webkit-scrollbar { width:4px; height:4px; }
-  .ord-root ::-webkit-scrollbar-track { background:transparent; }
-  .ord-root ::-webkit-scrollbar-thumb { background:rgba(124,58,237,.3); border-radius:2px; }
+  .ord-root { font-family: var(--font); color: var(--ink); animation: ord-in .35s ease both; }
+  @keyframes ord-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
   /* Header */
-  .ord-eyebrow {
-    display:flex; align-items:center; gap:8px;
-    font-family:'DM Mono',monospace;
-    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:#6b7280;
-    margin-bottom:8px;
-  }
-  .ord-eyebrow-dot {
-    width:6px; height:6px; border-radius:50%;
-    background:#7c3aed; box-shadow:0 0 8px #7c3aed;
-    animation: ord-pulse 2.5s ease-in-out infinite;
-  }
-  .ord-title {
-    font-size:34px; font-weight:600; color:#f1f5f9;
-    letter-spacing:-.025em; line-height:1.15; margin:0 0 6px;
-  }
-  .ord-subtitle { font-size:13.5px; color:#475569; }
+  .ord-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+  .ord-title   { font-family:var(--serif); font-size:26px; letter-spacing:-.02em; color:var(--ink); line-height:1; }
+  .ord-eyebrow { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--accent); margin-bottom:6px; }
+  .ord-subtitle{ font-size:12.5px; color:var(--sand-400); margin-top:5px; font-weight:500; }
 
   /* Stats */
-  .ord-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
-  @media(max-width:768px){ .ord-stats{ grid-template-columns:1fr 1fr; } }
-  .ord-stat {
-    background:rgba(255,255,255,.025);
-    border:1px solid rgba(255,255,255,.07);
-    border-radius:16px; padding:18px 20px;
-    transition:border-color .2s, transform .2s;
-    position:relative; overflow:hidden;
+  .ord-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:22px; }
+  @media(max-width:900px){ .ord-stats{ grid-template-columns:repeat(2,1fr); } }
+  @media(max-width:500px){ .ord-stats{ grid-template-columns:1fr 1fr; } }
+  .stat-card {
+    background:white; border:1px solid var(--sand-200); border-radius:var(--radius);
+    padding:14px 18px; transition:box-shadow .18s, transform .18s;
   }
-  .ord-stat::before {
-    content:''; position:absolute; inset:0;
-    background:linear-gradient(135deg,rgba(255,255,255,.03) 0%,transparent 60%);
-    pointer-events:none;
-  }
-  .ord-stat:hover { border-color:rgba(124,58,237,.35); transform:translateY(-2px); }
-  .ord-stat-icon {
-    width:32px; height:32px; border-radius:9px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:14px; margin-bottom:12px;
-  }
-  .ord-stat-val {
-    font-size:24px; font-weight:600; letter-spacing:-.02em; line-height:1;
-    font-family:'DM Mono',monospace;
-  }
-  .ord-stat-label { font-size:11px; color:#475569; margin-top:5px; font-weight:500; letter-spacing:.02em; }
+  .stat-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.07); transform:translateY(-1px); }
+  .stat-label { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--sand-400); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; letter-spacing:-.03em; line-height:1; }
+  .stat-sub   { font-size:11px; color:var(--sand-400); margin-top:4px; font-weight:500; }
+  .stat-icon  { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; margin-bottom:10px; }
 
   /* Toolbar */
-  .ord-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
-  .ord-search-wrap { position:relative; flex:1; min-width:200px; max-width:300px; }
-  .ord-search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#475569; pointer-events:none; }
-  .ord-search {
-    width:100%; height:36px; padding:0 12px 0 38px;
-    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-    border-radius:10px; font-size:13px; color:#e2e8f0;
-    font-family:'DM Sans',system-ui,sans-serif; outline:none;
-    transition:border-color .18s, box-shadow .18s;
+  .ord-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .search-box { position:relative; flex:1; min-width:180px; max-width:280px; }
+  .search-box svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--sand-400); pointer-events:none; }
+  .search-input {
+    display:block; width:100%;
+    border:1px solid var(--sand-200); border-radius:8px;
+    padding:8px 30px 8px 34px;
+    font-size:13px; font-family:var(--font); color:var(--ink);
+    background:white; outline:none;
+    transition:border-color .15s, box-shadow .15s;
   }
-  .ord-search::placeholder { color:#374151; }
-  .ord-search:focus { border-color:rgba(124,58,237,.5); box-shadow:0 0 0 3px rgba(124,58,237,.1); background:rgba(255,255,255,.06); }
+  .search-input::placeholder { color:var(--sand-300); }
+  .search-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-lite); }
+  .search-clear {
+    position:absolute; right:9px; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer;
+    color:var(--sand-400); font-size:13px; padding:2px; transition:color .15s;
+  }
+  .search-clear:hover { color:var(--ink); }
 
   /* Filter pills */
-  .ord-filters { display:flex; gap:6px; flex-wrap:wrap; }
-  .ord-filter-btn {
+  .filter-scroll { display:flex; gap:5px; flex-wrap:wrap; }
+  .filter-pill {
     height:32px; padding:0 12px;
-    border-radius:8px; border:1px solid rgba(255,255,255,.08);
+    border:1px solid var(--sand-200); border-radius:7px;
     font-size:11.5px; font-weight:600; cursor:pointer;
-    font-family:'DM Sans',system-ui,sans-serif;
-    background:transparent; color:#475569;
-    transition:all .18s; display:flex; align-items:center; gap:5px;
+    font-family:var(--font); background:white; color:var(--sand-500);
+    transition:all .15s; display:flex; align-items:center; gap:5px; white-space:nowrap;
     text-transform:capitalize;
   }
-  .ord-filter-btn:hover { border-color:rgba(124,58,237,.4); color:#a78bfa; }
-  .ord-filter-btn.active { background:rgba(124,58,237,.18); border-color:rgba(124,58,237,.4); color:#a78bfa; }
+  .filter-pill:hover { border-color:var(--sand-300); color:var(--ink); }
+  .filter-pill.active { background:var(--ink); color:white; border-color:var(--ink); }
+  .filter-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
 
-  .ord-sort {
+  .sort-select {
     height:32px; padding:0 10px; margin-left:auto;
-    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-    border-radius:8px; font-size:11.5px; color:#64748b;
-    font-family:'DM Sans',system-ui,sans-serif; outline:none; cursor:pointer;
-    transition:border-color .18s;
+    background:white; border:1px solid var(--sand-200); border-radius:8px;
+    font-size:12px; color:var(--sand-600);
+    font-family:var(--font); outline:none; cursor:pointer;
+    transition:border-color .15s;
   }
-  .ord-sort option { background:#0f172a; }
-  .ord-sort:focus { border-color:rgba(124,58,237,.4); }
+  .sort-select:focus { border-color:var(--accent); }
+
+  .result-count { font-size:12px; color:var(--sand-400); font-weight:500; white-space:nowrap; }
 
   /* Order cards */
   .ord-card {
-    background:rgba(255,255,255,.025);
-    border:1px solid rgba(255,255,255,.07);
-    border-radius:18px; overflow:hidden;
-    transition:border-color .2s, transform .2s;
-    animation: ord-up .42s cubic-bezier(.16,1,.3,1) both;
+    background:white;
+    border:1px solid var(--sand-200);
+    border-radius:14px;
+    overflow:hidden;
+    transition:border-color .18s, box-shadow .18s;
+    animation:card-rise .3s ease both;
   }
-  .ord-card:hover { border-color:rgba(124,58,237,.25); }
-  .ord-card.deleting { opacity:.45; pointer-events:none; }
+  @keyframes card-rise { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .ord-card:hover { border-color:var(--sand-300); box-shadow:0 4px 20px rgba(0,0,0,.07); }
+  .ord-card.deleting { opacity:.4; pointer-events:none; }
 
   /* Card header */
-  .ord-card-head {
-    padding:16px 20px 14px;
-    border-bottom:1px solid rgba(255,255,255,.05);
+  .card-head {
+    padding:14px 18px 12px;
+    border-bottom:1px solid var(--sand-100);
     display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;
+    background:var(--sand-50);
   }
-  .ord-card-head-left { flex:1; min-width:0; }
-  .ord-order-num {
-    font-size:14px; font-weight:700; color:#f1f5f9;
-    font-family:'DM Mono',monospace; letter-spacing:.01em;
-  }
-  .ord-date { font-size:11px; color:#374151; margin-top:3px; font-family:'DM Mono',monospace; }
-  .ord-badges { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-  .ord-amount {
-    font-size:18px; font-weight:700; color:#a78bfa;
-    font-family:'DM Mono',monospace; letter-spacing:-.01em;
-    white-space:nowrap; align-self:flex-start;
-    margin-left:auto;
+  .order-num { font-size:13.5px; font-weight:700; color:var(--ink); font-family:monospace; letter-spacing:.01em; }
+  .order-date { font-size:11px; color:var(--sand-400); margin-top:3px; font-family:monospace; }
+  .badge-row { display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:4px; }
+  .order-amount {
+    font-size:18px; font-weight:700; color:var(--ink);
+    font-family:monospace; letter-spacing:-.01em;
+    white-space:nowrap; margin-left:auto; align-self:flex-start;
   }
 
   /* Customer row */
-  .ord-customer {
-    padding:13px 20px;
-    border-bottom:1px solid rgba(255,255,255,.05);
+  .cust-row {
+    padding:12px 18px;
+    border-bottom:1px solid var(--sand-100);
     display:flex; align-items:center; gap:12px; flex-wrap:wrap;
   }
-  .ord-cust-avatar {
-    width:34px; height:34px; border-radius:10px; flex-shrink:0;
-    background:rgba(124,58,237,.18); border:1px solid rgba(124,58,237,.2);
+  .cust-avatar {
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
+    background:var(--sand-100); border:1px solid var(--sand-200);
     display:flex; align-items:center; justify-content:center;
-    font-size:12px; font-weight:700; color:#a78bfa;
-    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:12px; font-weight:700; color:var(--sand-600);
   }
-  .ord-cust-name { font-size:13.5px; font-weight:600; color:#e2e8f0; }
-  .ord-cust-email { font-size:11.5px; color:#475569; font-family:'DM Mono',monospace; }
-  .ord-cust-phone { font-size:12px; color:#374151; }
-  .ord-address {
-    font-size:12px; color:#475569; font-family:'DM Mono',monospace;
+  .cust-name  { font-size:13.5px; font-weight:600; color:var(--ink); }
+  .cust-email { font-size:11.5px; color:var(--sand-400); font-family:monospace; margin-top:2px; }
+  .cust-phone { font-size:12px; color:var(--sand-500); margin-top:1px; }
+  .cust-address {
     margin-left:auto; text-align:right;
+    font-size:11.5px; color:var(--sand-400); font-family:monospace;
     display:flex; flex-direction:column; gap:1px;
   }
 
   /* Items */
-  .ord-items {
-    padding:14px 20px;
-    border-bottom:1px solid rgba(255,255,255,.05);
+  .items-row { padding:12px 18px; border-bottom:1px solid var(--sand-100); }
+  .items-label {
+    font-size:9.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--sand-400); margin-bottom:8px;
   }
-  .ord-items-label {
-    font-size:9.5px; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
-    color:#334155; font-family:'DM Mono',monospace; margin-bottom:10px;
-  }
-  .ord-item-row {
+  .item-line {
     display:flex; align-items:center; gap:10px;
-    padding:7px 0; border-bottom:1px solid rgba(255,255,255,.03);
+    padding:6px 0; border-bottom:1px solid var(--sand-100);
   }
-  .ord-item-row:last-child { border-bottom:none; }
-  .ord-item-dot {
-    width:6px; height:6px; border-radius:50%;
-    background:rgba(124,58,237,.4); flex-shrink:0;
-  }
-  .ord-item-name { font-size:13px; color:#cbd5e1; flex:1; }
-  .ord-item-qty  { font-size:12px; color:#475569; font-family:'DM Mono',monospace; }
-  .ord-item-price{ font-size:13px; font-weight:600; color:#a78bfa; font-family:'DM Mono',monospace; }
+  .item-line:last-child { border-bottom:none; }
+  .item-dot { width:5px; height:5px; border-radius:50%; background:var(--sand-300); flex-shrink:0; }
+  .item-name  { font-size:13px; color:var(--sand-700); flex:1; }
+  .item-qty   { font-size:12px; color:var(--sand-400); font-family:monospace; }
+  .item-price { font-size:13px; font-weight:700; color:var(--ink); font-family:monospace; }
 
   /* Controls */
-  .ord-controls {
-    padding:14px 20px;
+  .controls-row {
+    padding:12px 18px;
     display:flex; align-items:center; gap:8px; flex-wrap:wrap;
   }
   .ord-select {
-    height:34px; padding:0 10px;
-    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-    border-radius:8px; font-size:12px; color:#94a3b8;
-    font-family:'DM Sans',system-ui,sans-serif; outline:none; cursor:pointer;
-    transition:border-color .18s, box-shadow .18s;
-    text-transform:capitalize;
+    height:32px; padding:0 10px;
+    background:white; border:1px solid var(--sand-200); border-radius:7px;
+    font-size:12px; color:var(--sand-600);
+    font-family:var(--font); outline:none; cursor:pointer;
+    transition:border-color .15s; text-transform:capitalize;
   }
-  .ord-select option { background:#0f172a; text-transform:capitalize; }
-  .ord-select:focus { border-color:rgba(124,58,237,.5); box-shadow:0 0 0 3px rgba(124,58,237,.1); }
-  .ord-select:hover { border-color:rgba(255,255,255,.15); }
+  .ord-select option { text-transform:capitalize; }
+  .ord-select:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-lite); }
+  .ord-select:hover { border-color:var(--sand-300); }
 
-  .ord-del-wrap { margin-left:auto; display:flex; align-items:center; gap:8px; }
-  .ord-del-hint { font-size:11px; color:#334155; font-family:'DM Mono',monospace; }
-  .ord-del-confirm {
-    display:inline-flex; align-items:center; gap:6px;
-    padding:4px 8px; border-radius:8px;
-    background:rgba(220,38,38,.1); border:1px solid rgba(220,38,38,.2);
+  /* Delete zone */
+  .del-wrap { margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .del-hint { font-size:11px; color:var(--sand-300); font-family:monospace; }
+  .del-btn {
+    height:32px; padding:0 13px;
+    background:white; border:1px solid rgba(220,38,38,.2);
+    border-radius:7px; font-size:12px; font-weight:600;
+    color:var(--red); font-family:var(--font); cursor:pointer;
+    transition:all .15s; white-space:nowrap;
   }
-  .ord-del-confirm span { font-size:11.5px; color:#f87171; font-weight:600; }
-  .ord-del-yes {
+  .del-btn:hover:not(:disabled) { background:rgba(220,38,38,.05); border-color:rgba(220,38,38,.35); }
+  .del-btn:disabled { opacity:.35; cursor:not-allowed; color:var(--sand-300); border-color:var(--sand-100); }
+  .del-confirm {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:5px 10px; border-radius:7px;
+    background:rgba(220,38,38,.06); border:1px solid rgba(220,38,38,.18);
+  }
+  .del-confirm-text { font-size:12px; color:var(--red); font-weight:600; }
+  .del-yes {
+    padding:3px 10px; border-radius:5px;
+    font-size:12px; font-weight:700; cursor:pointer;
+    border:none; font-family:var(--font);
+    background:var(--red); color:white; transition:opacity .15s;
+  }
+  .del-yes:disabled { opacity:.6; }
+  .del-no {
     padding:3px 9px; border-radius:5px;
-    font-size:11.5px; font-weight:700; cursor:pointer;
-    border:none; font-family:'DM Sans',system-ui,sans-serif;
-    background:#dc2626; color:white; transition:opacity .15s;
-  }
-  .ord-del-yes:disabled { opacity:.6; }
-  .ord-del-no {
-    padding:3px 9px; border-radius:5px;
-    font-size:11.5px; font-weight:700; cursor:pointer;
-    background:rgba(255,255,255,.06); color:#64748b;
-    border:1px solid rgba(255,255,255,.08);
-    font-family:'DM Sans',system-ui,sans-serif;
-  }
-  .ord-del-btn {
-    height:34px; padding:0 14px;
-    background:rgba(220,38,38,.1); border:1px solid rgba(220,38,38,.2);
-    border-radius:8px; font-size:12px; font-weight:700; color:#f87171;
-    font-family:'DM Sans',system-ui,sans-serif; cursor:pointer;
-    transition:all .18s; white-space:nowrap;
-  }
-  .ord-del-btn:hover { background:rgba(220,38,38,.2); border-color:rgba(220,38,38,.4); }
-  .ord-del-btn:disabled { opacity:.4; cursor:not-allowed; }
-  .ord-del-btn.locked {
-    background:transparent; border-color:rgba(255,255,255,.06);
-    color:#334155; cursor:not-allowed;
+    font-size:12px; font-weight:600; cursor:pointer;
+    background:white; color:var(--sand-500);
+    border:1px solid var(--sand-200); font-family:var(--font);
   }
 
   /* Empty */
-  .ord-empty {
-    padding:72px 20px; text-align:center;
+  .empty-state {
+    padding:64px 24px; text-align:center;
     display:flex; flex-direction:column; align-items:center; gap:10px;
   }
-  .ord-empty-icon {
-    width:54px; height:54px; border-radius:15px;
-    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
-    display:flex; align-items:center; justify-content:center; color:#334155;
-    margin-bottom:4px;
-  }
-  .ord-empty-title { font-size:15px; font-weight:600; color:#64748b; }
-  .ord-empty-sub   { font-size:13px; color:#334155; }
-
-  /* Skeleton */
-  .ord-skel {
-    height:200px; border-radius:18px; margin-bottom:0;
-    background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.03) 75%);
-    background-size:200% 100%; animation:ord-skel 1.6s ease-in-out infinite;
-  }
+  .empty-icon  { font-size:36px; opacity:.4; }
+  .empty-title { font-size:14px; font-weight:600; color:var(--ink); }
+  .empty-sub   { font-size:13px; color:var(--sand-400); }
 
   /* Toast */
-  .ord-toast {
-    position:fixed; bottom:24px; right:24px; z-index:9999;
-    padding:12px 18px; border-radius:12px;
-    font-size:13px; font-weight:600; font-family:'DM Sans',system-ui,sans-serif;
-    box-shadow:0 8px 28px rgba(0,0,0,.35);
-    display:flex; align-items:center; gap:8px;
-    animation:ord-in .28s cubic-bezier(.16,1,.3,1) both;
-    pointer-events:none; max-width:340px;
-    background:#1e1b4b; color:#e2e8f0;
-    border:1px solid rgba(124,58,237,.3);
+  .toast {
+    position:fixed; bottom:22px; right:22px; z-index:100;
+    display:flex; align-items:center; gap:9px;
+    padding:11px 17px; border-radius:10px;
+    font-size:13.5px; font-weight:600;
+    box-shadow:0 8px 28px rgba(0,0,0,.14);
+    animation:toast-in .25s cubic-bezier(.16,1,.3,1) both;
+    pointer-events:none; max-width:340px; font-family:var(--font);
   }
-  .ord-toast.err { background:#1f0a0a; color:#fca5a5; border-color:rgba(220,38,38,.3); }
-  .ord-toast.ok  { background:#052e16; color:#86efac; border-color:rgba(52,211,153,.25); }
+  @keyframes toast-in { from{opacity:0;transform:translateY(8px) scale(.97)} to{opacity:1;transform:none} }
+  .toast.ok  { background:#15803d; color:white; }
+  .toast.err { background:var(--red); color:white; }
+  .toast.info{ background:var(--ink); color:white; }
+  .toast-icon {
+    width:20px; height:20px; border-radius:50%;
+    background:rgba(255,255,255,.2);
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:900; flex-shrink:0;
+  }
+
+  .spinner { animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 `
 
-/* ─────────────────────────────────────────
-   Page
-───────────────────────────────────────── */
-export default function AdminOrdersPage() {
-  const [orders, setOrders]             = useState<Order[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [deletingId, setDeletingId]     = useState<string | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const [toast, setToast]               = useState<{ msg: string; type: 'ok' | 'err' | 'info' } | null>(null)
-  const [search, setSearch]             = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [sortKey, setSortKey]           = useState('newest')
+const STATUS_FILTERS = ['all','pending','confirmed','processing','shipped','delivered','cancelled','refunded']
 
-  const showToast = (msg: string, type: 'ok' | 'err' | 'info' = 'info') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+export default function AdminOrdersPage() {
+  const [orders,        setOrders]        = useState<Order[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [deletingId,    setDeletingId]    = useState<string|null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string|null>(null)
+  const [toast,         setToast]         = useState<{ msg:string; type:'ok'|'err'|'info' }|null>(null)
+  const [search,        setSearch]        = useState('')
+  const [statusFilter,  setStatusFilter]  = useState('all')
+  const [sortKey,       setSortKey]       = useState('newest')
+
+  const showToast = (msg: string, type: 'ok'|'err'|'info' = 'info') => {
+    setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }
 
   const fetchOrders = async () => {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('orders')
-      .select('id, order_number, total_amount, status, payment_status, fulfillment_status, created_at, shipping_address, items, customers(first_name,last_name,email,phone)')
+      .select('id,order_number,total_amount,status,payment_status,fulfillment_status,created_at,shipping_address,items,customers(first_name,last_name,email,phone)')
       .order('created_at', { ascending: false })
     if (error) { showToast('Failed to load orders: ' + error.message, 'err'); setLoading(false); return }
     setOrders((data || []) as Order[])
@@ -410,181 +337,131 @@ export default function AdminOrdersPage() {
     const { error } = await supabase.from('orders').update(updates).eq('id', id)
     if (error) { showToast('Update failed: ' + error.message, 'err'); return }
     setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o))
-    showToast('Order updated.', 'ok')
+    showToast('Order updated', 'ok')
   }
 
   const handleDelete = async (id: string) => {
-    setDeletingId(id)
-    setDeleteConfirm(null)
+    setDeletingId(id); setDeleteConfirm(null)
     const supabase = createClient()
     const { error } = await supabase.from('orders').delete().eq('id', id)
     setDeletingId(null)
     if (error) { showToast('Delete failed: ' + error.message, 'err'); return }
     setOrders(prev => prev.filter(o => o.id !== id))
-    showToast('Order permanently deleted.', 'ok')
+    showToast('Order deleted', 'ok')
   }
 
-  /* ── Filter + sort ── */
   const filtered = orders
     .filter(o => {
       const c = Array.isArray(o.customers) ? o.customers[0] : o.customers
       const q = search.toLowerCase()
-      const matchQ = !q || [
-        o.order_number, c?.first_name, c?.last_name, c?.email, c?.phone,
-      ].some(v => v?.toLowerCase().includes(q))
+      const matchQ = !q || [o.order_number, c?.first_name, c?.last_name, c?.email, c?.phone].some(v => v?.toLowerCase().includes(q))
       const matchS = statusFilter === 'all' || o.status === statusFilter
       return matchQ && matchS
     })
     .sort((a, b) => {
-      if (sortKey === 'oldest')  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      if (sortKey === 'amount')  return b.total_amount - a.total_amount
+      if (sortKey === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      if (sortKey === 'amount') return b.total_amount - a.total_amount
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
-  /* Stats */
   const stats = {
     total:     orders.length,
     pending:   orders.filter(o => o.status === 'pending').length,
     delivered: orders.filter(o => o.status === 'delivered').length,
-    revenue:   orders.filter(o => o.status !== 'cancelled' && o.status !== 'refunded')
-                     .reduce((s, o) => s + (o.total_amount || 0), 0),
+    revenue:   orders.filter(o => !['cancelled','refunded'].includes(o.status)).reduce((s, o) => s + (o.total_amount || 0), 0),
   }
-  const STATS = [
-    { label: 'Total Orders',    value: stats.total,          color: '#e2e8f0', icon: '📦', iconBg: 'rgba(255,255,255,.06)' },
-    { label: 'Pending',         value: stats.pending,        color: '#fbbf24', icon: '⏳', iconBg: 'rgba(251,191,36,.1)' },
-    { label: 'Delivered',       value: stats.delivered,      color: '#34d399', icon: '✅', iconBg: 'rgba(52,211,153,.1)' },
-    { label: 'Net Revenue',     value: fmt(stats.revenue),   color: '#a78bfa', icon: '₹',  iconBg: 'rgba(124,58,237,.12)' },
-  ]
 
-  const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
-
-  /* ─── Loading ─── */
   if (loading) return (
-    <div className="ord-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+    <>
       <style>{CSS}</style>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ position: 'relative', width: 52, height: 52, margin: '0 auto 16px' }}>
-          <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid rgba(255,255,255,.06)' }}/>
-          <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderTopColor: '#7c3aed', animation: 'ord-spin 1s linear infinite' }}/>
-        </div>
-        <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: '#334155', animation: 'ord-pulse 2s ease-in-out infinite' }}>
-          Loading orders
-        </p>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:260, gap:12, fontFamily:'var(--font)' }}>
+        <svg className="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--sand-300)" strokeWidth="2.5">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        <span style={{ fontSize:13, color:'var(--sand-400)', fontWeight:500 }}>Loading orders…</span>
       </div>
-    </div>
+    </>
   )
 
   return (
-    <div className="ord-root">
+    <>
       <style>{CSS}</style>
+      <div className="ord-root">
 
-      {/* Orbs */}
-      <div className="ord-orb ord-orb-1"/>
-      <div className="ord-orb ord-orb-2"/>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`ord-toast ${toast.type === 'err' ? 'err' : toast.type === 'ok' ? 'ok' : ''}`}>
-          {toast.type === 'ok'
-            ? <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-            : toast.type === 'err'
-            ? <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
-            : <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          }
-          {toast.msg}
-        </div>
-      )}
-
-      <div className="ord-inner">
-
-        {/* ── Header ── */}
-        <div style={{ marginBottom: 32 }} className="a-up">
-          <div className="ord-eyebrow">
-            <span className="ord-eyebrow-dot"/>
-            Order Management
+        {/* Toast */}
+        {toast && (
+          <div className={`toast ${toast.type}`}>
+            <div className="toast-icon">{toast.type === 'ok' ? '✓' : toast.type === 'err' ? '✕' : 'i'}</div>
+            {toast.msg}
           </div>
-          <h1 className="ord-title">Orders</h1>
-          <p className="ord-subtitle">{orders.length} total orders</p>
+        )}
+
+        {/* Header */}
+        <div className="ord-header">
+          <div>
+            <p className="ord-eyebrow">Commerce</p>
+            <h1 className="ord-title">Orders</h1>
+            <p className="ord-subtitle">{orders.length} total orders</p>
+          </div>
         </div>
 
-        {/* ── Stats ── */}
-        <div className="ord-stats a-fade" style={{ animationDelay: '.08s' }}>
-          {STATS.map((s, i) => (
-            <div key={s.label} className="ord-stat" style={{ animationDelay: `${.04 * i}s` }}>
-              <div className="ord-stat-icon" style={{ background: s.iconBg }}>
-                <span style={{ fontSize: 15 }}>{s.icon}</span>
-              </div>
-              <div className="ord-stat-val" style={{ color: s.color }}>{s.value}</div>
-              <div className="ord-stat-label">{s.label}</div>
+        {/* Stats */}
+        <div className="ord-stats">
+          {[
+            { label: 'Total Orders', value: stats.total,        color: 'var(--ink)',   icon: '📦', iconBg: 'var(--sand-100)' },
+            { label: 'Pending',      value: stats.pending,      color: '#b45309',      icon: '⏳', iconBg: 'rgba(217,119,6,.1)' },
+            { label: 'Delivered',    value: stats.delivered,    color: 'var(--green)', icon: '✅', iconBg: 'rgba(22,163,74,.09)' },
+            { label: 'Net Revenue',  value: fmt(stats.revenue), color: 'var(--ink)',   icon: '₹',  iconBg: 'var(--sand-100)', mono: true },
+          ].map(s => (
+            <div key={s.label} className="stat-card">
+              <div className="stat-icon" style={{ background: s.iconBg }}>{s.icon}</div>
+              <div className="stat-value" style={{ color: s.color, fontFamily: s.mono ? 'monospace' : 'inherit', fontSize: s.mono ? 20 : 26 }}>{s.value}</div>
+              <div className="stat-label">{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* ── Toolbar ── */}
-        <div className="ord-toolbar a-up" style={{ animationDelay: '.1s' }}>
-          <div className="ord-search-wrap">
-            <span className="ord-search-icon">
-              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-              </svg>
-            </span>
-            <input
-              className="ord-search" type="text"
-              placeholder="Search order, customer…"
-              value={search} onChange={e => setSearch(e.target.value)}
-            />
+        {/* Toolbar */}
+        <div className="ord-toolbar">
+          <div className="search-box">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="search" className="search-input" placeholder="Search order, customer…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
           </div>
-          <div className="ord-filters">
+
+          <div className="filter-scroll">
             {STATUS_FILTERS.map(s => (
-              <button
-                key={s}
-                className={`ord-filter-btn ${statusFilter === s ? 'active' : ''}`}
-                onClick={() => setStatusFilter(s)}
-                style={statusFilter === s && s !== 'all' && ORDER_STATUS_CFG[s] ? {
-                  background: ORDER_STATUS_CFG[s].bg,
-                  borderColor: ORDER_STATUS_CFG[s].dot + '66',
-                  color: ORDER_STATUS_CFG[s].text,
-                } : {}}
-              >
-                {s === 'all' ? 'All' : (
-                  <>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: ORDER_STATUS_CFG[s]?.dot ?? '#64748b', display: 'inline-block' }}/>
-                    {s.replace(/_/g,' ')}
-                  </>
-                )}
+              <button key={s} className={`filter-pill ${statusFilter === s ? 'active' : ''}`}
+                onClick={() => setStatusFilter(s)}>
+                {s !== 'all' && <span className="filter-dot" style={{ background: ORDER_CFG[s]?.dot ?? 'var(--sand-300)' }} />}
+                {s === 'all' ? 'All' : s.replace(/_/g, ' ')}
               </button>
             ))}
           </div>
-          <select className="ord-sort" value={sortKey} onChange={e => setSortKey(e.target.value)}>
+
+          <select className="sort-select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="amount">Highest amount</option>
           </select>
+
+          <span className="result-count">{filtered.length} / {orders.length}</span>
         </div>
 
-        {/* ── Results count ── */}
-        <div style={{ marginBottom: 14, fontSize: 12, color: '#334155', fontFamily: "'DM Mono',monospace" }}>
-          {filtered.length} / {orders.length} orders
-          {search && (
-            <button onClick={() => setSearch('')} style={{ marginLeft: 10, fontSize: 11, color: '#475569', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans,system-ui' }}>
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* ── Order cards ── */}
+        {/* Cards */}
         {filtered.length === 0 ? (
-          <div className="ord-empty a-in">
-            <div className="ord-empty-icon">
-              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
+          <div style={{ background:'white', border:'1px solid var(--sand-200)', borderRadius:14, overflow:'hidden' }}>
+            <div className="empty-state">
+              <div className="empty-icon">📋</div>
+              <div className="empty-title">No orders found</div>
+              <div className="empty-sub">Try adjusting your search or filters</div>
             </div>
-            <div className="ord-empty-title">No orders found</div>
-            <div className="ord-empty-sub">Try adjusting your search or filters</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {filtered.map((o, i) => {
               const c = Array.isArray(o.customers) ? o.customers[0] : o.customers
               const days = ageDays(o.created_at)
@@ -594,103 +471,90 @@ export default function AdminOrdersPage() {
               const initials = `${c?.first_name?.charAt(0) ?? ''}${c?.last_name?.charAt(0) ?? ''}` || '?'
 
               return (
-                <div
-                  key={o.id}
-                  className={`ord-card ${isDeleting ? 'deleting' : ''}`}
-                  style={{ animationDelay: `${.05 + i * .04}s` }}
-                >
-                  {/* ── Card header ── */}
-                  <div className="ord-card-head">
-                    <div className="ord-card-head-left">
-                      <div className="ord-order-num">{o.order_number}</div>
-                      <div className="ord-date">{fmtDate(o.created_at)}</div>
+                <div key={o.id} className={`ord-card ${isDeleting ? 'deleting' : ''}`} style={{ animationDelay: `${i * .04}s` }}>
+
+                  {/* Header */}
+                  <div className="card-head">
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div className="order-num">{o.order_number}</div>
+                      <div className="order-date">{fmtDate(o.created_at)}</div>
+                      <div className="badge-row">
+                        <StatusBadge cfg={ORDER_CFG}   val={o.status} />
+                        <StatusBadge cfg={PAYMENT_CFG} val={o.payment_status} />
+                        <StatusBadge cfg={FULFIL_CFG}  val={o.fulfillment_status} />
+                      </div>
                     </div>
-                    <div className="ord-badges">
-                      {badge(ORDER_STATUS_CFG, o.status)}
-                      {badge(PAYMENT_CFG, o.payment_status)}
-                      {badge(FULFIL_CFG, o.fulfillment_status)}
-                    </div>
-                    <div className="ord-amount">{fmt(o.total_amount)}</div>
+                    <div className="order-amount">{fmt(o.total_amount)}</div>
                   </div>
 
-                  {/* ── Customer ── */}
-                  <div className="ord-customer">
-                    <div className="ord-cust-avatar">{initials}</div>
+                  {/* Customer */}
+                  <div className="cust-row">
+                    <div className="cust-avatar">{initials}</div>
                     <div>
-                      <div className="ord-cust-name">{c?.first_name} {c?.last_name}</div>
-                      <div className="ord-cust-email">{c?.email || '—'}</div>
-                      {c?.phone && <div className="ord-cust-phone">{c.phone}</div>}
+                      <div className="cust-name">{c?.first_name} {c?.last_name}</div>
+                      <div className="cust-email">{c?.email || '—'}</div>
+                      {c?.phone && <div className="cust-phone">{c.phone}</div>}
                     </div>
                     {o.shipping_address && (
-                      <div className="ord-address">
+                      <div className="cust-address">
                         <span>{o.shipping_address.address || o.shipping_address.street || ''}</span>
                         <span>{[o.shipping_address.city, o.shipping_address.state, o.shipping_address.pincode || o.shipping_address.zip].filter(Boolean).join(', ')}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* ── Items ── */}
+                  {/* Items */}
                   {Array.isArray(o.items) && o.items.length > 0 && (
-                    <div className="ord-items">
-                      <div className="ord-items-label">Order Items · {o.items.length} product{o.items.length !== 1 ? 's' : ''}</div>
+                    <div className="items-row">
+                      <div className="items-label">{o.items.length} item{o.items.length !== 1 ? 's' : ''}</div>
                       {o.items.map((it, idx) => (
-                        <div key={idx} className="ord-item-row">
-                          <span className="ord-item-dot"/>
-                          <span className="ord-item-name">{it.name || 'Item'}</span>
-                          <span className="ord-item-qty">× {it.quantity || 1}</span>
-                          <span className="ord-item-price">
-                            {fmt(it.total ?? (Number(it.price || 0) * Number(it.quantity || 1)))}
-                          </span>
+                        <div key={idx} className="item-line">
+                          <span className="item-dot" />
+                          <span className="item-name">{it.name || 'Item'}</span>
+                          <span className="item-qty">× {it.quantity || 1}</span>
+                          <span className="item-price">{fmt(it.total ?? (Number(it.price||0) * Number(it.quantity||1)))}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* ── Controls ── */}
-                  <div className="ord-controls">
-                    {/* Status selects */}
+                  {/* Controls */}
+                  <div className="controls-row">
                     {[
-                      { key: 'status',             label: 'Status',      options: ['pending','confirmed','processing','shipped','delivered','cancelled','refunded'], val: o.status },
-                      { key: 'payment_status',     label: 'Payment',     options: ['pending','authorized','captured','failed','refunded'],                           val: o.payment_status },
-                      { key: 'fulfillment_status', label: 'Fulfillment', options: ['unfulfilled','partially_fulfilled','fulfilled','returned'],                      val: o.fulfillment_status },
+                      { key:'status',             label:'Status',      options:['pending','confirmed','processing','shipped','delivered','cancelled','refunded'], val:o.status },
+                      { key:'payment_status',     label:'Payment',     options:['pending','authorized','captured','failed','refunded'],                           val:o.payment_status },
+                      { key:'fulfillment_status', label:'Fulfillment', options:['unfulfilled','partially_fulfilled','fulfilled','returned'],                      val:o.fulfillment_status },
                     ].map(sel => (
-                      <select
-                        key={sel.key}
-                        className="ord-select"
-                        value={sel.val}
-                        onChange={e => updateOrder(o.id, { [sel.key]: e.target.value })}
-                      >
+                      <select key={sel.key} className="ord-select" value={sel.val}
+                        onChange={e => updateOrder(o.id, { [sel.key]: e.target.value })}>
                         {sel.options.map(opt => (
                           <option key={opt} value={opt}>{sel.label}: {opt.replace(/_/g,' ')}</option>
                         ))}
                       </select>
                     ))}
 
-                    {/* Delete zone */}
-                    <div className="ord-del-wrap">
-                      {!canDelete && (
-                        <span className="ord-del-hint">{30 - days}d until deletable</span>
-                      )}
+                    <div className="del-wrap">
+                      {!canDelete && <span className="del-hint">{30 - days}d until deletable</span>}
                       {isConfirming ? (
-                        <div className="ord-del-confirm">
-                          <span>Delete permanently?</span>
-                          <button className="ord-del-yes" disabled={isDeleting} onClick={() => handleDelete(o.id)}>
+                        <div className="del-confirm">
+                          <span className="del-confirm-text">Delete permanently?</span>
+                          <button className="del-yes" disabled={isDeleting} onClick={() => handleDelete(o.id)}>
                             {isDeleting ? '…' : 'Yes'}
                           </button>
-                          <button className="ord-del-no" onClick={() => setDeleteConfirm(null)}>No</button>
+                          <button className="del-no" onClick={() => setDeleteConfirm(null)}>No</button>
                         </div>
                       ) : (
                         <button
-                          className={`ord-del-btn ${!canDelete ? 'locked' : ''}`}
+                          className="del-btn"
                           disabled={!canDelete || isDeleting}
                           onClick={() => canDelete && setDeleteConfirm(o.id)}
                         >
                           {isDeleting ? (
-                            <svg className="ord-spinner" width="12" height="12" style={{ animation: 'ord-spin 1s linear infinite' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 8z"/>
+                            <svg className="spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display:'inline', verticalAlign:'middle', marginRight:4 }}>
+                              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                             </svg>
                           ) : (
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ display: 'inline', verticalAlign: 'middle', marginRight: 5 }}>
+                            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ display:'inline', verticalAlign:'middle', marginRight:4 }}>
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                           )}
@@ -705,6 +569,6 @@ export default function AdminOrdersPage() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
