@@ -6,13 +6,13 @@ interface Category {
   id: string
   name: string
   slug: string
-  description: string
-  image_url: string
+  description: string | null
+  image_url: string | null
   parent_id: string | null
   position: number
   is_active: boolean
   created_at: string
-  updated_at: string
+  updated_at: string | null
 }
 
 export default function CategoriesManagementPage() {
@@ -22,6 +22,9 @@ export default function CategoriesManagementPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -30,31 +33,79 @@ export default function CategoriesManagementPage() {
     position: 0,
     is_active: true,
   })
+
   const formRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchCategories() }, [])
 
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(null), 3000)
+  }
+
   const fetchCategories = async () => {
+    setLoading(true)
     const supabase = createClient()
     const { data, error } = await supabase
       .from('categories')
       .select('*')
       .order('position', { ascending: true })
-    if (data && !error) setCategories(data)
+    if (error) {
+      console.error('Fetch error:', error)
+      setError(`Failed to load categories: ${error.message}`)
+    } else {
+      setCategories(data ?? [])
+    }
     setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
+    setError(null)
     const supabase = createClient()
-    if (editingCategory) {
-      const { error } = await supabase.from('categories').update(formData).eq('id', editingCategory.id)
-      if (!error) { fetchCategories(); setShowForm(false); setEditingCategory(null); resetForm() }
-    } else {
-      const { error } = await supabase.from('categories').insert([formData])
-      if (!error) { fetchCategories(); setShowForm(false); resetForm() }
+
+    const payload = {
+      name: formData.name.trim(),
+      slug: formData.slug.trim(),
+      description: formData.description.trim() || null,
+      image_url: formData.image_url.trim() || null,
+      position: formData.position,
+      is_active: formData.is_active,
     }
+
+    if (editingCategory) {
+      const { error } = await supabase
+        .from('categories')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', editingCategory.id)
+
+      if (error) {
+        console.error('Update error:', error)
+        setError(`Update failed: ${error.message}`)
+      } else {
+        showSuccess(`"${payload.name}" updated successfully`)
+        fetchCategories()
+        setShowForm(false)
+        setEditingCategory(null)
+        resetForm()
+      }
+    } else {
+      const { error } = await supabase
+        .from('categories')
+        .insert([payload])
+
+      if (error) {
+        console.error('Insert error:', error)
+        setError(`Create failed: ${error.message}`)
+      } else {
+        showSuccess(`"${payload.name}" created successfully`)
+        fetchCategories()
+        setShowForm(false)
+        resetForm()
+      }
+    }
+
     setSaving(false)
   }
 
@@ -69,28 +120,63 @@ export default function CategoriesManagementPage() {
       is_active: category.is_active,
     })
     setShowForm(true)
+    setError(null)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
   }
 
   const handleDelete = async (categoryId: string) => {
+    setError(null)
     const supabase = createClient()
     const { error } = await supabase.from('categories').delete().eq('id', categoryId)
-    if (!error) { fetchCategories(); setDeleteConfirm(null) }
+    if (error) {
+      console.error('Delete error:', error)
+      setError(`Delete failed: ${error.message}`)
+    } else {
+      showSuccess('Category deleted')
+      fetchCategories()
+      setDeleteConfirm(null)
+    }
   }
 
   const resetForm = () => {
     setFormData({ name: '', slug: '', description: '', image_url: '', position: 0, is_active: true })
     setEditingCategory(null)
+    setError(null)
   }
 
   const autoSlug = (name: string) =>
     name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
+  const handleNameChange = (name: string) => {
+    setFormData(f => ({
+      ...f,
+      name,
+      // Only auto-generate slug when creating new, or if slug is still empty
+      slug: !editingCategory ? autoSlug(name) : f.slug,
+    }))
+  }
+
   return (
     <>
       <style>{`
-        /* ── Page vars inherited from layout ── */
         .cat-page { --accent: #c8622a; --accent-2: #e07a3d; --accent-dim: rgba(200,98,42,.12); }
+
+        /* ── Toast ── */
+        .cat-toast {
+          position: fixed; top: 20px; right: 20px; z-index: 9999;
+          padding: 12px 18px; border-radius: 10px;
+          font-size: 13.5px; font-weight: 600;
+          box-shadow: 0 8px 24px rgba(0,0,0,.15);
+          animation: toast-in .25s ease;
+          display: flex; align-items: center; gap: 8px;
+          max-width: 360px;
+        }
+        .cat-toast.success { background: #16a34a; color: white; }
+        .cat-toast.error   { background: #dc2626; color: white; }
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateY(-10px) scale(.95); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
 
         /* ── Page header ── */
         .cat-page-header {
@@ -100,38 +186,33 @@ export default function CategoriesManagementPage() {
         }
         .cat-page-eyebrow {
           font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
-          text-transform: uppercase; color: var(--accent);
-          margin-bottom: 4px;
+          text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
         }
         .cat-page-title {
           font-family: var(--font-serif);
           font-size: 26px; color: var(--ink);
           letter-spacing: -.02em; line-height: 1.2; margin: 0;
         }
-        .cat-page-sub {
-          font-size: 13px; color: var(--sand-500); margin-top: 4px;
-        }
+        .cat-page-sub { font-size: 13px; color: var(--sand-500); margin-top: 4px; }
 
         /* ── Stat chips ── */
         .cat-stats { display: flex; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
         .cat-stat {
           background: white; border: 1px solid var(--sand-200);
           border-radius: 12px; padding: 13px 18px;
-          box-shadow: 0 1px 4px rgba(0,0,0,.04);
-          min-width: 110px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.04); min-width: 110px;
         }
         .cat-stat-label {
           font-size: 9.5px; font-weight: 700; text-transform: uppercase;
           letter-spacing: .12em; color: var(--sand-400); margin-bottom: 4px;
         }
         .cat-stat-val {
-          font-family: var(--font-serif); font-size: 26px;
-          line-height: 1; color: var(--ink);
+          font-family: var(--font-serif); font-size: 26px; line-height: 1; color: var(--ink);
         }
-        .cat-stat-val.green { color: #16a34a; }
-        .cat-stat-val.muted { color: var(--sand-500); }
+        .cat-stat-val.green  { color: #16a34a; }
+        .cat-stat-val.muted  { color: var(--sand-500); }
 
-        /* ── CTA btn ── */
+        /* ── Buttons ── */
         .cat-add-btn {
           display: inline-flex; align-items: center; gap: 7px;
           padding: 0 18px; height: 38px;
@@ -141,40 +222,26 @@ export default function CategoriesManagementPage() {
           font-family: var(--font-body);
           cursor: pointer; letter-spacing: -.01em;
           transition: all .18s; white-space: nowrap;
-          text-decoration: none;
         }
-        .cat-add-btn:hover {
+        .cat-add-btn:hover:not(:disabled) {
           background: var(--sand-800);
           box-shadow: 0 4px 14px rgba(0,0,0,.18);
           transform: translateY(-1px);
         }
+        .cat-add-btn:disabled { opacity: .6; cursor: not-allowed; }
         .cat-add-btn.secondary {
           background: white; color: var(--sand-600);
-          border: 1px solid var(--sand-200);
-          box-shadow: none;
+          border: 1px solid var(--sand-200); box-shadow: none;
         }
         .cat-add-btn.secondary:hover {
-          background: var(--sand-50);
-          color: var(--ink);
-          transform: none;
-          box-shadow: 0 2px 8px rgba(0,0,0,.07);
-        }
-        .cat-add-btn.danger {
-          background: #fef2f2; color: #dc2626;
-          border: 1px solid rgba(220,38,38,.2);
-          box-shadow: none;
-        }
-        .cat-add-btn.danger:hover {
-          background: #fee2e2;
-          transform: none;
-          box-shadow: none;
+          background: var(--sand-50); color: var(--ink);
+          transform: none; box-shadow: 0 2px 8px rgba(0,0,0,.07);
         }
 
         /* ── Card shell ── */
         .cat-card {
           background: white; border: 1px solid var(--sand-200);
-          border-radius: 16px;
-          box-shadow: 0 2px 12px rgba(0,0,0,.04);
+          border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.04);
           overflow: hidden;
           animation: cat-card-in .35s ease both;
         }
@@ -183,19 +250,26 @@ export default function CategoriesManagementPage() {
           to   { opacity: 1; transform: translateY(0); }
         }
         .cat-card-head {
-          padding: 18px 22px 16px;
-          border-bottom: 1px solid var(--sand-100);
+          padding: 18px 22px 16px; border-bottom: 1px solid var(--sand-100);
           display: flex; align-items: center; gap: 12px;
         }
         .cat-card-icon {
           width: 36px; height: 36px; border-radius: 10px;
           background: var(--ink);
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .cat-card-title { font-size: 14px; font-weight: 700; color: var(--ink); margin: 0; }
         .cat-card-sub   { font-size: 11.5px; color: var(--sand-400); margin-top: 2px; }
         .cat-card-body  { padding: 22px; }
+
+        /* ── Inline error banner ── */
+        .cat-error-banner {
+          display: flex; align-items: flex-start; gap: 10px;
+          padding: 12px 16px; border-radius: 10px;
+          background: #fef2f2; border: 1px solid rgba(220,38,38,.2);
+          color: #dc2626; font-size: 13px; font-weight: 500;
+          margin-bottom: 16px;
+        }
 
         /* ── Form ── */
         .cat-form { display: flex; flex-direction: column; gap: 18px; }
@@ -203,36 +277,30 @@ export default function CategoriesManagementPage() {
         @media (max-width: 640px) { .cat-form-grid { grid-template-columns: 1fr; } }
         .cat-field { display: flex; flex-direction: column; gap: 5px; }
         .cat-label {
-          font-size: 11.5px; font-weight: 600; color: var(--sand-600);
-          letter-spacing: -.01em;
+          font-size: 11.5px; font-weight: 600; color: var(--sand-600); letter-spacing: -.01em;
         }
         .cat-input {
           height: 38px; padding: 0 12px;
-          border: 1px solid var(--sand-200);
-          border-radius: 9px;
-          font-size: 13.5px; color: var(--ink);
-          font-family: var(--font-body);
-          background: var(--sand-50);
-          outline: none;
-          transition: all .18s;
+          border: 1px solid var(--sand-200); border-radius: 9px;
+          font-size: 13.5px; color: var(--ink); font-family: var(--font-body);
+          background: var(--sand-50); outline: none; transition: all .18s;
         }
         .cat-input:focus {
-          border-color: var(--accent);
-          background: white;
+          border-color: var(--accent); background: white;
           box-shadow: 0 0 0 3px var(--accent-dim);
         }
         .cat-textarea {
-          padding: 10px 12px;
-          height: 80px; resize: vertical;
+          padding: 10px 12px; height: 80px; resize: vertical;
           border: 1px solid var(--sand-200); border-radius: 9px;
-          font-size: 13.5px; color: var(--ink);
-          font-family: var(--font-body);
-          background: var(--sand-50); outline: none;
-          transition: all .18s; line-height: 1.5;
+          font-size: 13.5px; color: var(--ink); font-family: var(--font-body);
+          background: var(--sand-50); outline: none; transition: all .18s; line-height: 1.5;
         }
         .cat-textarea:focus {
           border-color: var(--accent); background: white;
           box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+        .cat-slug-hint {
+          font-size: 11px; color: var(--sand-400); margin-top: 2px;
         }
         .cat-toggle-row {
           display: flex; align-items: center; gap: 10px;
@@ -240,23 +308,16 @@ export default function CategoriesManagementPage() {
           background: var(--sand-50); border: 1px solid var(--sand-200);
           cursor: pointer; user-select: none;
         }
-        .cat-toggle {
-          position: relative; width: 36px; height: 20px;
-          flex-shrink: 0;
-        }
+        .cat-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
         .cat-toggle input { opacity: 0; width: 0; height: 0; }
         .cat-toggle-slider {
           position: absolute; inset: 0; border-radius: 99px;
-          background: var(--sand-300);
-          transition: background .18s;
+          background: var(--sand-300); transition: background .18s;
         }
         .cat-toggle-slider::after {
-          content: '';
-          position: absolute;
-          width: 14px; height: 14px;
-          border-radius: 50%; background: white;
-          top: 3px; left: 3px;
-          transition: transform .18s;
+          content: ''; position: absolute;
+          width: 14px; height: 14px; border-radius: 50%; background: white;
+          top: 3px; left: 3px; transition: transform .18s;
           box-shadow: 0 1px 3px rgba(0,0,0,.15);
         }
         .cat-toggle input:checked + .cat-toggle-slider { background: #16a34a; }
@@ -267,43 +328,32 @@ export default function CategoriesManagementPage() {
 
         /* ── Table ── */
         .cat-table-wrap { overflow-x: auto; }
-        .cat-table {
-          width: 100%; border-collapse: collapse;
-          font-size: 13px;
-        }
-        .cat-table thead tr {
-          border-bottom: 1px solid var(--sand-100);
-        }
+        .cat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .cat-table thead tr { border-bottom: 1px solid var(--sand-100); }
         .cat-table th {
-          padding: 10px 16px;
-          text-align: left;
+          padding: 10px 16px; text-align: left;
           font-size: 10px; font-weight: 700;
           text-transform: uppercase; letter-spacing: .12em;
-          color: var(--sand-400); white-space: nowrap;
-          background: var(--sand-50);
+          color: var(--sand-400); white-space: nowrap; background: var(--sand-50);
         }
         .cat-table th:last-child { text-align: right; }
-        .cat-table tbody tr {
-          border-bottom: 1px solid var(--sand-100);
-          transition: background .15s;
-        }
+        .cat-table tbody tr { border-bottom: 1px solid var(--sand-100); transition: background .15s; }
         .cat-table tbody tr:last-child { border-bottom: none; }
         .cat-table tbody tr:hover { background: var(--sand-50); }
         .cat-table td { padding: 14px 16px; vertical-align: middle; }
         .cat-table td:last-child { text-align: right; }
 
-        /* ── Category name cell ── */
         .cat-name-cell { display: flex; align-items: center; gap: 10px; }
         .cat-name-avatar {
           width: 34px; height: 34px; border-radius: 9px;
           background: var(--sand-100); border: 1px solid var(--sand-200);
           display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; font-size: 14px;
-          overflow: hidden;
+          flex-shrink: 0; font-size: 14px; overflow: hidden;
         }
         .cat-name-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .cat-name-primary { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-        .cat-name-pos    { font-size: 11px; color: var(--sand-400); margin-top: 1px; }
+        .cat-name-pos     { font-size: 11px; color: var(--sand-400); margin-top: 1px; }
+
         .cat-slug-pill {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 3px 8px; border-radius: 6px;
@@ -315,25 +365,15 @@ export default function CategoriesManagementPage() {
         .cat-status-badge {
           display: inline-flex; align-items: center; gap: 5px;
           padding: 3px 9px; border-radius: 6px;
-          font-size: 11px; font-weight: 700;
-          letter-spacing: .04em; white-space: nowrap;
+          font-size: 11px; font-weight: 700; letter-spacing: .04em; white-space: nowrap;
         }
-        .cat-status-badge.active {
-          background: #dcfce7; color: #15803d;
-          border: 1px solid #bbf7d0;
-        }
-        .cat-status-badge.inactive {
-          background: var(--sand-100); color: var(--sand-500);
-          border: 1px solid var(--sand-200);
-        }
-        .cat-status-dot {
-          width: 5px; height: 5px; border-radius: 50%;
-          background: currentColor;
-        }
+        .cat-status-badge.active   { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .cat-status-badge.inactive { background: var(--sand-100); color: var(--sand-500); border: 1px solid var(--sand-200); }
+        .cat-status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
         .cat-desc-text {
           color: var(--sand-500); max-width: 200px;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          font-size: 12.5px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px;
         }
         .cat-action-btns { display: inline-flex; align-items: center; gap: 6px; }
         .cat-action-btn {
@@ -343,22 +383,16 @@ export default function CategoriesManagementPage() {
           font-family: var(--font-body); transition: all .15s;
           background: white; color: var(--sand-600);
         }
-        .cat-action-btn:hover {
-          border-color: var(--sand-300); color: var(--ink);
-          box-shadow: 0 1px 6px rgba(0,0,0,.07);
-        }
-        .cat-action-btn.edit:hover  { border-color: var(--accent); color: var(--accent); }
+        .cat-action-btn:hover        { border-color: var(--sand-300); color: var(--ink); box-shadow: 0 1px 6px rgba(0,0,0,.07); }
+        .cat-action-btn.edit:hover   { border-color: var(--accent); color: var(--accent); }
         .cat-action-btn.delete:hover { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
 
-        /* ── Delete confirm inline ── */
         .cat-delete-confirm {
           display: inline-flex; align-items: center; gap: 6px;
           padding: 4px 6px; border-radius: 8px;
           background: #fef2f2; border: 1px solid rgba(220,38,38,.2);
         }
-        .cat-delete-confirm span {
-          font-size: 11.5px; color: #dc2626; font-weight: 600; white-space: nowrap;
-        }
+        .cat-delete-confirm span { font-size: 11.5px; color: #dc2626; font-weight: 600; white-space: nowrap; }
         .cat-del-yes, .cat-del-no {
           padding: 3px 9px; border-radius: 5px;
           font-size: 11.5px; font-weight: 700;
@@ -381,7 +415,7 @@ export default function CategoriesManagementPage() {
         .cat-empty-title { font-size: 14px; font-weight: 700; color: var(--ink); }
         .cat-empty-sub   { font-size: 13px; color: var(--sand-400); }
 
-        /* ── Skeleton loader ── */
+        /* ── Skeleton ── */
         .cat-skel {
           height: 52px; border-radius: 8px;
           background: linear-gradient(90deg, var(--sand-100) 25%, var(--sand-200) 50%, var(--sand-100) 75%);
@@ -393,7 +427,18 @@ export default function CategoriesManagementPage() {
           0%   { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
+
+      {/* Success Toast */}
+      {successMsg && (
+        <div className="cat-toast success">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+          </svg>
+          {successMsg}
+        </div>
+      )}
 
       <div className="cat-page">
         {/* Header */}
@@ -404,10 +449,7 @@ export default function CategoriesManagementPage() {
             <p className="cat-page-sub">Organise your product taxonomy</p>
           </div>
           {!showForm && (
-            <button
-              className="cat-add-btn"
-              onClick={() => { resetForm(); setShowForm(true) }}
-            >
+            <button className="cat-add-btn" onClick={() => { resetForm(); setShowForm(true) }}>
               <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14"/>
               </svg>
@@ -419,8 +461,8 @@ export default function CategoriesManagementPage() {
         {/* Stat strip */}
         <div className="cat-stats">
           {[
-            { label: 'Total', value: categories.length, cls: '' },
-            { label: 'Active', value: categories.filter(c => c.is_active).length, cls: 'green' },
+            { label: 'Total',    value: categories.length,                          cls: '' },
+            { label: 'Active',   value: categories.filter(c => c.is_active).length, cls: 'green' },
             { label: 'Inactive', value: categories.filter(c => !c.is_active).length, cls: 'muted' },
           ].map(s => (
             <div key={s.label} className="cat-stat">
@@ -429,6 +471,17 @@ export default function CategoriesManagementPage() {
             </div>
           ))}
         </div>
+
+        {/* Global error banner */}
+        {error && !showForm && (
+          <div className="cat-error-banner" style={{ marginBottom: 20 }}>
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, marginTop: 1 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            {error}
+            <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 0 }}>✕</button>
+          </div>
+        )}
 
         {/* Form card */}
         {showForm && (
@@ -459,9 +512,22 @@ export default function CategoriesManagementPage() {
                 </svg>
               </button>
             </div>
+
             <div className="cat-card-body">
+              {/* Inline form error */}
+              {error && (
+                <div className="cat-error-banner">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, marginTop: 1 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                  </svg>
+                  {error}
+                  <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 0 }}>✕</button>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="cat-form">
                 <div className="cat-form-grid">
+                  {/* Name */}
                   <div className="cat-field">
                     <label className="cat-label">Name *</label>
                     <input
@@ -469,16 +535,12 @@ export default function CategoriesManagementPage() {
                       type="text"
                       placeholder="e.g. Summer Collection"
                       value={formData.name}
-                      onChange={e => {
-                        const name = e.target.value
-                        setFormData(f => ({
-                          ...f, name,
-                          slug: f.slug || !editingCategory ? autoSlug(name) : f.slug
-                        }))
-                      }}
+                      onChange={e => handleNameChange(e.target.value)}
                       required
                     />
                   </div>
+
+                  {/* Slug */}
                   <div className="cat-field">
                     <label className="cat-label">Slug *</label>
                     <input
@@ -486,10 +548,13 @@ export default function CategoriesManagementPage() {
                       type="text"
                       placeholder="summer-collection"
                       value={formData.slug}
-                      onChange={e => setFormData(f => ({ ...f, slug: e.target.value }))}
+                      onChange={e => setFormData(f => ({ ...f, slug: autoSlug(e.target.value) }))}
                       required
                     />
+                    <span className="cat-slug-hint">Auto-generated from name. Lowercase, hyphens only.</span>
                   </div>
+
+                  {/* Image URL */}
                   <div className="cat-field">
                     <label className="cat-label">Image URL</label>
                     <input
@@ -500,6 +565,8 @@ export default function CategoriesManagementPage() {
                       onChange={e => setFormData(f => ({ ...f, image_url: e.target.value }))}
                     />
                   </div>
+
+                  {/* Sort Position */}
                   <div className="cat-field">
                     <label className="cat-label">Sort Position</label>
                     <input
@@ -511,6 +578,8 @@ export default function CategoriesManagementPage() {
                     />
                   </div>
                 </div>
+
+                {/* Description */}
                 <div className="cat-field">
                   <label className="cat-label">Description</label>
                   <textarea
@@ -520,6 +589,8 @@ export default function CategoriesManagementPage() {
                     onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
                   />
                 </div>
+
+                {/* Active toggle */}
                 <label className="cat-toggle-row">
                   <span className="cat-toggle">
                     <input
@@ -532,6 +603,8 @@ export default function CategoriesManagementPage() {
                   <span className="cat-toggle-label">Active</span>
                   <span className="cat-toggle-hint">Visible to customers</span>
                 </label>
+
+                {/* Actions */}
                 <div className="cat-form-actions">
                   <button type="submit" className="cat-add-btn" disabled={saving}>
                     {saving ? (
@@ -539,11 +612,16 @@ export default function CategoriesManagementPage() {
                         <svg width="13" height="13" style={{ animation: 'spin 1s linear infinite' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 8z"/>
                         </svg>
-                        Saving…
+                        {editingCategory ? 'Saving…' : 'Creating…'}
                       </>
                     ) : editingCategory ? 'Save Changes' : 'Create Category'}
                   </button>
-                  <button type="button" className="cat-add-btn secondary" onClick={() => { setShowForm(false); resetForm() }}>
+                  <button
+                    type="button"
+                    className="cat-add-btn secondary"
+                    onClick={() => { setShowForm(false); resetForm() }}
+                    disabled={saving}
+                  >
                     Cancel
                   </button>
                 </div>
@@ -565,7 +643,7 @@ export default function CategoriesManagementPage() {
               <div className="cat-card-title">All Categories</div>
               <div className="cat-card-sub">{categories.length} total</div>
             </div>
-            {showForm ? null : (
+            {!showForm && (
               <button className="cat-add-btn secondary" style={{ marginLeft: 'auto' }} onClick={() => { resetForm(); setShowForm(true) }}>
                 <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14"/>
@@ -577,7 +655,9 @@ export default function CategoriesManagementPage() {
 
           {loading ? (
             <div style={{ padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[1,2,3].map(i => <div key={i} className="cat-skel" style={{ animationDelay: `${i * 0.1}s` }}/>)}
+              {[1, 2, 3].map(i => (
+                <div key={i} className="cat-skel" style={{ animationDelay: `${i * 0.1}s` }}/>
+              ))}
             </div>
           ) : categories.length === 0 ? (
             <div className="cat-empty">
@@ -612,7 +692,7 @@ export default function CategoriesManagementPage() {
                         <div className="cat-name-cell">
                           <div className="cat-name-avatar">
                             {cat.image_url
-                              ? <img src={cat.image_url} alt={cat.name} onError={e => (e.currentTarget.style.display='none')}/>
+                              ? <img src={cat.image_url} alt={cat.name} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
                               : cat.name.charAt(0).toUpperCase()
                             }
                           </div>
@@ -671,7 +751,6 @@ export default function CategoriesManagementPage() {
           )}
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   )
 }

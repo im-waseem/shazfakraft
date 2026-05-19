@@ -70,7 +70,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
   const [priceFlash,    setPriceFlash]    = useState(false)
   const [colorDropOpen, setColorDropOpen] = useState(false)
-  const colorDropRef = useRef<HTMLDivElement>(null)
+
+  const colorDropRef  = useRef<HTMLDivElement>(null)
+  const galleryRef    = useRef<HTMLDivElement>(null)
+
+  // Touch swipe state
+  const touchStartX   = useRef<number>(0)
+  const touchStartY   = useRef<number>(0)
+  const isDragging    = useRef<boolean>(false)
 
   /* ── Fetch ───────────────────────────────────────────────────────────────*/
   const fetchProduct = useCallback(async () => {
@@ -91,17 +98,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .eq('product_id', data.id).eq('is_active', true).order('position')
       const vList: Variant[] = vData || []
       setVariants(vList)
-
-      /* ── FIX: default-select first valid variant ────────────────────────
-         This ensures selectedVariant is never null on page load,
-         which was causing stock to fall back to product.inventory_quantity = 0 */
       if (vList.length > 0) {
         const firstColor = vList[0].options.color ?? ''
         const firstSize  = vList[0].options.size_inches ?? ''
         setSelectedColor(firstColor)
         setSelectedSize(firstSize)
       }
-
       const relQ = supabase
         .from('products')
         .select('id,name,slug,price,compare_price,main_image_url,inventory_quantity')
@@ -141,23 +143,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const discount        = displayCompare && displayCompare > displayPrice
     ? Math.round((1 - displayPrice / displayCompare) * 100) : 0
 
-  /* ─── FIX: Smart stock logic ─────────────────────────────────────────────
-     Priority:
-       1. If a specific variant is selected → use its stock
-       2. If no variant selected but variants exist → sum all variant stocks
-          (never show OOS just because no selection was made yet)
-       3. Fallback to product.inventory_quantity for products without variants
-  */
   const stock = (() => {
     if (selectedVariant) return selectedVariant.inventory_quantity
     if (variants.length > 0) return variants.reduce((a, v) => a + v.inventory_quantity, 0)
     return product?.inventory_quantity ?? 0
   })()
 
-  /* ─── FIX: Show stock message based on context ───────────────────────────*/
   const stockLabel = (() => {
     if (variants.length > 0 && !selectedVariant) {
-      // No combo selected yet — show total availability
       const total = variants.reduce((a, v) => a + v.inventory_quantity, 0)
       if (total === 0) return { text: 'Currently Unavailable', cls: 'oos' }
       if (total <= 10) return { text: `Only ${total} units left — select a size & color`, cls: 'low-stock' }
@@ -167,9 +160,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     if (stock <= 10) return { text: `Only ${stock} left — order soon!`, cls: 'low-stock' }
     return { text: `In Stock · ${stock} units available`, cls: 'in-stock' }
   })()
-
-  /* ─── FIX: CTA disabled only when actually OOS (not just unselected) ────*/
-  const ctaDisabled = stock <= 0
 
   const availableSizes  = Array.from(new Set(
     variants.filter(v => v.is_active).map(v => v.options.size_inches).filter(Boolean)
@@ -222,6 +212,42 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     if (colorIdx > -1) setSelectedImage(colorIdx)
   }
 
+  /* ── Gallery navigation ──────────────────────────────────────────────────*/
+  const goToImage = (index: number) => {
+    if (!allImages.length) return
+    const clamped = Math.max(0, Math.min(allImages.length - 1, index))
+    setSelectedImage(clamped)
+  }
+
+  /* ── Touch handlers for mobile swipe ────────────────────────────────────*/
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    isDragging.current  = false
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartX.current)
+    const dy = Math.abs(e.touches[0].clientY - touchStartY.current)
+    // Only prevent scroll if horizontal swipe is dominant
+    if (dx > dy && dx > 10) {
+      isDragging.current = true
+      e.preventDefault()
+    }
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isDragging.current) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const threshold = 50
+    if (Math.abs(dx) > threshold) {
+      if (dx < 0) goToImage(selectedImage + 1) // swipe left → next
+      else        goToImage(selectedImage - 1) // swipe right → prev
+    }
+    isDragging.current = false
+  }
+
+  /* ── Cart handler ────────────────────────────────────────────────────────*/
   const handleAddToCart = () => {
     if (!product) return
     const cart = JSON.parse(localStorage.getItem('cart') || '[]')
@@ -246,9 +272,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     v.options.color?.toLowerCase() === selectedColor.toLowerCase() &&
     (!selectedSize || v.options.size_inches === selectedSize)
   )
-  const colorImage = (colorVariant as any)?.image_url ?? null
-  const selectedColorHex = COLOR_HEX[selectedColor.toLowerCase()] || '#ccc'
-  const colorsCount = availableColors.length
+  const colorImage        = (colorVariant as any)?.image_url ?? null
+  const selectedColorHex  = COLOR_HEX[selectedColor.toLowerCase()] || '#ccc'
+  const colorsCount       = availableColors.length
 
   /* ─── Loading / Not Found ────────────────────────────────────────────────*/
   if (loading) return (
@@ -283,8 +309,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         @keyframes priceFlash { 0%{opacity:0.3;transform:scale(0.96)} 100%{opacity:1;transform:scale(1)} }
         @keyframes dropDown { from{opacity:0;transform:translateY(-6px) scaleY(0.95)} to{opacity:1;transform:translateY(0) scaleY(1)} }
         @keyframes slideImg { from{opacity:0;transform:scale(1.03)} to{opacity:1;transform:scale(1)} }
+        @keyframes swipeHint { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+
         .price-flash { animation: priceFlash 0.35s ease both; }
         .page-enter  { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
+        /* ── NAV ── */
         .sk-nav {
           background: #fff; height: 58px; padding: 0 20px;
           display: flex; align-items: center; gap: 14px;
@@ -307,6 +337,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           font-family:inherit;
         }
         .sk-cart-btn:hover { background:#b8860b; transform:translateY(-1px); box-shadow: 0 4px 14px rgba(184,134,11,.3); }
+
+        /* ── BREADCRUMB ── */
         .sk-crumb {
           background:#fff; border-bottom:1px solid #ede9e0;
           padding:10px 20px; font-size:12px; color:#999;
@@ -315,95 +347,185 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         }
         .sk-crumb a { color:#8b6914; text-decoration:none; font-weight:500; }
         .sk-crumb a:hover { text-decoration:underline; }
+
+        /* ── LAYOUT ── */
         .sk-main {
           max-width: 1120px; margin: 20px auto;
           display: grid; grid-template-columns: 1fr;
-          gap: 0; background: #fff; border-radius: 20px;
+          background: #fff; border-radius: 20px;
           overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08);
           border: 1px solid #ede9e0;
         }
-        @media(min-width: 768px) { .sk-main { grid-template-columns: 500px 1fr; margin: 24px auto; } }
-        @media(min-width: 1024px) { .sk-main { grid-template-columns: 520px 1fr; } }
-        .sk-gallery { background: #f9f7f4; }
+        @media(min-width: 768px) {
+          .sk-main { grid-template-columns: 500px 1fr; margin: 24px auto; }
+        }
+        @media(min-width: 1024px) {
+          .sk-main { grid-template-columns: 520px 1fr; }
+        }
+
+        /* ── GALLERY ── */
+        .sk-gallery { background: #f9f7f4; position: relative; }
+
+        /* Gallery touch container */
+        .gallery-touch-wrap {
+          position: relative;
+          touch-action: pan-y; /* allow vertical scroll but intercept horizontal */
+          user-select: none;
+          -webkit-user-select: none;
+        }
+
         .sk-img-main {
           position: relative; aspect-ratio: 1;
-          background: #f2efe9; overflow: hidden; cursor: zoom-in;
+          background: #f2efe9; overflow: hidden;
         }
+        /* Desktop: show zoom cursor */
+        @media(min-width: 768px) { .sk-img-main { cursor: zoom-in; } }
+
         .sk-img-main img { transition: transform 0.4s cubic-bezier(.25,.46,.45,.94); }
         .sk-img-main:hover img { transform: scale(1.04); }
-        .sk-img-main .slide-anim { animation: slideImg 0.3s ease both; }
+        .slide-anim { animation: slideImg 0.3s ease both; }
+
+        /* Desktop arrows — hidden on mobile */
         .gal-arrow {
+          display: none; /* hidden on mobile by default */
           position: absolute; top: 50%; transform: translateY(-50%);
-          width: 36px; height: 36px; border-radius: 50%; border: none;
+          width: 40px; height: 40px; border-radius: 50%; border: none;
           background: rgba(255,255,255,.92); cursor: pointer; z-index: 3;
-          display:flex; align-items:center; justify-content:center;
+          align-items: center; justify-content: center;
           box-shadow: 0 2px 8px rgba(0,0,0,.14); transition: all .18s;
           backdrop-filter: blur(4px);
         }
-        .gal-arrow:hover { background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2); transform: translateY(-50%) scale(1.08); }
-        .gal-arrow:disabled { opacity: .25; cursor: not-allowed; transform: translateY(-50%); box-shadow: none; }
+        @media(min-width: 768px) {
+          .gal-arrow { display: flex; }
+          .gal-arrow:hover { background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2); transform: translateY(-50%) scale(1.08); }
+          .gal-arrow:disabled { opacity: .25; cursor: not-allowed; transform: translateY(-50%); box-shadow: none; }
+        }
         .gal-arrow.left  { left: 12px; }
         .gal-arrow.right { right: 12px; }
-        .gal-dots { position:absolute; bottom:12px; left:0; right:0; display:flex; justify-content:center; gap:5px; z-index:3; }
-        .gal-dot  { width:7px; height:7px; border-radius:4px; border:none; cursor:pointer; padding:0;
-                    background:rgba(255,255,255,.5); transition:all .22s; }
-        .gal-dot.active { width:22px; background:#b8860b; }
+
+        /* Swipe hint on mobile */
+        .swipe-hint {
+          display: flex;
+          position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+          align-items: center; gap: 4px; z-index: 4;
+          background: rgba(0,0,0,.45); color: #fff;
+          font-size: 10px; font-weight: 700; letter-spacing: .06em;
+          padding: 4px 10px; border-radius: 50px; pointer-events: none;
+          backdrop-filter: blur(4px);
+        }
+        .swipe-hint svg { animation: swipeHint 1.5s ease-in-out infinite; }
+        @media(min-width: 768px) { .swipe-hint { display: none; } }
+
+        /* Dot indicator */
+        .gal-dots {
+          position: absolute; bottom: 12px; left: 0; right: 0;
+          display: flex; justify-content: center; gap: 5px; z-index: 3;
+        }
+        .gal-dot {
+          width: 7px; height: 7px; border-radius: 4px; border: none;
+          cursor: pointer; padding: 0; background: rgba(255,255,255,.5);
+          transition: all .22s;
+        }
+        .gal-dot.active { width: 22px; background: #b8860b; }
+
+        /* Thumbs */
         .sk-thumbs {
-          display:flex; gap:7px; padding:12px 14px;
-          background:#faf8f4; border-top:1px solid #ede9e0;
-          overflow-x:auto; scroll-behavior:smooth;
+          display: flex; gap: 7px; padding: 12px 14px;
+          background: #faf8f4; border-top: 1px solid #ede9e0;
+          overflow-x: auto; scroll-behavior: smooth;
         }
-        .sk-thumbs::-webkit-scrollbar { height:3px; }
-        .sk-thumbs::-webkit-scrollbar-thumb { background:#ddd; border-radius:2px; }
+        .sk-thumbs::-webkit-scrollbar { height: 3px; }
+        .sk-thumbs::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
         .sk-thumb {
-          flex-shrink:0; width:62px; height:62px; border-radius:10px; overflow:hidden;
-          border:2.5px solid transparent; cursor:pointer; transition:all .2s; background:#ede9e0;
+          flex-shrink: 0; width: 62px; height: 62px; border-radius: 10px; overflow: hidden;
+          border: 2.5px solid transparent; cursor: pointer; transition: all .2s; background: #ede9e0;
         }
-        .sk-thumb.active { border-color:#b8860b; box-shadow:0 0 0 2px rgba(184,134,11,.2); }
-        .sk-thumb:hover:not(.active) { border-color:#c8a060; transform:translateY(-1px); }
+        .sk-thumb.active { border-color: #b8860b; box-shadow: 0 0 0 2px rgba(184,134,11,.2); }
+        .sk-thumb:hover:not(.active) { border-color: #c8a060; transform: translateY(-1px); }
+
         .sk-disc-ribbon {
-          position:absolute; top:14px; left:0; z-index:4;
-          background:#1a1a1a; color:#fff; font-size:11px; font-weight:800;
-          padding:5px 15px 5px 10px; letter-spacing:.04em;
-          clip-path:polygon(0 0,100% 0,calc(100% - 8px) 50%,100% 100%,0 100%);
+          position: absolute; top: 14px; left: 0; z-index: 4;
+          background: #1a1a1a; color: #fff; font-size: 11px; font-weight: 800;
+          padding: 5px 15px 5px 10px; letter-spacing: .04em;
+          clip-path: polygon(0 0,100% 0,calc(100% - 8px) 50%,100% 100%,0 100%);
         }
         .sk-feat-pill {
-          position:absolute; top:14px; right:12px; z-index:4;
-          background:linear-gradient(135deg,#d4a020,#b8860b); color:#fff;
-          font-size:9.5px; font-weight:800; padding:4px 10px;
-          border-radius:50px; letter-spacing:.07em; text-transform:uppercase;
+          position: absolute; top: 14px; right: 12px; z-index: 4;
+          background: linear-gradient(135deg,#d4a020,#b8860b); color: #fff;
+          font-size: 9.5px; font-weight: 800; padding: 4px 10px;
+          border-radius: 50px; letter-spacing: .07em; text-transform: uppercase;
         }
-        .sk-info { padding: 26px 24px; overflow-y: auto; }
+
+        /* ── INFO PANEL ── */
+        .sk-info {
+          padding: 20px 16px;
+          overflow-y: auto;
+        }
+        @media(min-width: 768px) { .sk-info { padding: 26px 24px; } }
+
         .sk-category-tag {
           font-size: 10px; font-weight: 800; letter-spacing: .13em;
           text-transform: uppercase; color: #b8860b; margin-bottom: 8px; display: block;
         }
-        .sk-title { font-family: 'Syne', sans-serif; font-size: 21px; font-weight: 800; line-height: 1.35; color: #1a1a1a; margin-bottom: 8px; }
-        @media(min-width:768px) { .sk-title { font-size:24px; } }
+        .sk-title {
+          font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800;
+          line-height: 1.35; color: #1a1a1a; margin-bottom: 8px;
+        }
+        @media(min-width: 768px) { .sk-title { font-size: 24px; } }
+
         .sk-short-desc { font-size: 13.5px; color: #777; line-height: 1.7; margin-bottom: 16px; }
-        .sk-rating { display:flex; align-items:center; gap:8px; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid #ede9e0; }
-        .sk-stars { color: #c8860a; font-size:14px; letter-spacing:2px; }
+        .sk-rating {
+          display: flex; align-items: center; gap: 8px; margin-bottom: 18px;
+          padding-bottom: 18px; border-bottom: 1px solid #ede9e0;
+        }
+        .sk-stars { color: #c8860a; font-size: 14px; letter-spacing: 2px; }
+
+        /* Price box */
         .sk-price-box {
           background: linear-gradient(135deg, #fdf9f0 0%, #faf5e6 100%);
-          border: 1px solid #e8d898; border-radius: 14px; padding: 16px 18px; margin-bottom: 20px;
+          border: 1px solid #e8d898; border-radius: 14px;
+          padding: 14px 16px; margin-bottom: 18px;
         }
         .sk-price-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
         .sk-price-main {
-          font-size: 34px; font-weight: 900; color: #1a1a1a; line-height: 1;
+          font-size: 32px; font-weight: 900; color: #1a1a1a; line-height: 1;
           font-variant-numeric: tabular-nums; font-family: 'Syne', sans-serif;
         }
-        .sk-price-main sup { font-size: 17px; vertical-align: super; }
+        .sk-price-main sup { font-size: 16px; vertical-align: super; }
         .sk-price-was { font-size: 13px; color: #bbb; text-decoration: line-through; margin-top: 5px; }
         .sk-save-badge {
           display: inline-flex; align-items: center; gap: 4px;
           background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: 800;
           padding: 4px 12px; border-radius: 50px; margin-top: 8px; border: 1px solid #c8e6c9;
         }
-        .sk-section-title { font-size: 13px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+
+        /* ── SIZE SELECTOR ── */
+        .sk-section-title {
+          font-size: 13px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px;
+          display: flex; align-items: center; gap: 6px;
+        }
         .sk-section-title .selected-val { color: #b8860b; font-weight: 700; }
-        .sk-size-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+
+        /* Mobile: horizontal scroll for sizes */
+        .sk-size-scroll {
+          display: flex; gap: 8px; overflow-x: auto;
+          padding-bottom: 6px; margin-bottom: 18px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+        }
+        .sk-size-scroll::-webkit-scrollbar { height: 3px; }
+        .sk-size-scroll::-webkit-scrollbar-thumb { background: #e0d9cc; border-radius: 2px; }
+
+        /* Desktop: wrap */
+        @media(min-width: 768px) {
+          .sk-size-scroll { flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; }
+        }
+
         .sk-size-box {
-          position: relative; min-width: 72px; padding: 10px 14px;
+          position: relative;
+          flex-shrink: 0; /* prevent shrink in scroll */
+          scroll-snap-align: start;
+          min-width: 72px; padding: 10px 14px;
           border: 2px solid #e5e0d8; border-radius: 12px; background: #fff; cursor: pointer;
           transition: all .2s cubic-bezier(.34,1.56,.64,1); text-align: center;
           display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -419,9 +541,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           transform: translateY(-1px);
         }
         .sk-size-box:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
-        .sk-size-box .size-label { font-size: 13.5px; font-weight: 800; color: #1a1a1a; }
+        .sk-size-box .size-label { font-size: 13.5px; font-weight: 800; color: #1a1a1a; white-space: nowrap; }
         .sk-size-box.selected .size-label { color: #b8860b; }
-        .sk-size-box .size-price { font-size: 11px; color: #999; font-weight: 600; }
+        .sk-size-box .size-price { font-size: 11px; color: #999; font-weight: 600; white-space: nowrap; }
         .sk-size-box.selected .size-price { color: #c8960c; }
         .sk-size-box .size-oos { font-size: 9px; color: #ddd; font-weight: 600; }
         .sk-size-box .size-check {
@@ -430,14 +552,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           display: flex; align-items: center; justify-content: center;
           animation: checkIn .25s ease; box-shadow: 0 2px 6px rgba(184,134,11,.4);
         }
-        .sk-color-dropdown-wrap { position: relative; margin-bottom: 20px; }
+
+        /* ── COLOR DROPDOWN ── */
+        .sk-color-dropdown-wrap { position: relative; margin-bottom: 18px; }
         .sk-color-trigger {
-          width: 100%; padding: 12px 16px; border: 2px solid #e5e0d8; border-radius: 12px;
+          width: 100%; padding: 11px 14px; border: 2px solid #e5e0d8; border-radius: 12px;
           background: #fff; cursor: pointer; display: flex; align-items: center; gap: 12px;
           transition: all .2s; font-family: inherit; outline: none;
         }
-        .sk-color-trigger:hover, .sk-color-trigger.open { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
-        .sk-color-trigger .color-swatch { width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; transition: transform .2s; }
+        .sk-color-trigger:hover, .sk-color-trigger.open {
+          border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12);
+        }
+        .sk-color-trigger .color-swatch {
+          width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(0,0,0,.1);
+          flex-shrink: 0; transition: transform .2s;
+        }
         .sk-color-trigger:hover .color-swatch { transform: scale(1.1); }
         .sk-color-trigger .color-name { font-size: 14px; font-weight: 700; color: #1a1a1a; flex: 1; text-align: left; }
         .sk-color-trigger .color-count { font-size: 12px; color: #aaa; font-weight: 500; }
@@ -462,6 +591,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-color-option .opt-check { width: 18px; height: 18px; border-radius: 50%; background: #b8860b; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; animation: checkIn .2s ease; }
         .sk-color-option + .sk-color-option { border-top: 1px solid #f0ede8; }
 
+        /* Quick swatch row */
+        .sk-swatch-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+        .sk-mini-swatch {
+          width: 30px; height: 30px; border-radius: 8px; border: 2.5px solid transparent;
+          cursor: pointer; transition: all .2s cubic-bezier(.34,1.56,.64,1); position: relative;
+        }
+        .sk-mini-swatch:hover { transform: scale(1.15); box-shadow: 0 3px 10px rgba(0,0,0,.2); }
+        .sk-mini-swatch.selected { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.25); transform: scale(1.1); }
+        .sk-mini-swatch:disabled { opacity: .3; cursor: not-allowed; transform: none !important; }
+        .sk-mini-swatch .mini-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,.5); animation: checkIn .2s ease; }
+
         /* ── STOCK INDICATOR ── */
         .sk-stock {
           display: flex; align-items: center; gap: 8px;
@@ -473,15 +613,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-stock.oos       { background: #fff5f5; color: #dc2626; }
         .sk-stock-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
-        /* ── SELECT PROMPT (new) ── */
-        .sk-select-prompt {
+        .sk-summary-bar {
+          background: linear-gradient(135deg, #fdf9f0, #faf3dd);
+          border: 1.5px solid #e8d898; border-radius: 11px; padding: 10px 14px;
+          margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #8b6914;
           display: flex; align-items: center; gap: 8px;
-          font-size: 13px; font-weight: 600; color: #b8860b;
-          padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
-          background: #fdf9f0; border: 1.5px solid #e8d898;
         }
 
-        .sk-qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+        /* ── QTY ── */
+        .sk-qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
         .sk-qty-label { font-size: 13px; font-weight: 700; color: #555; }
         .sk-qty-box { display: flex; align-items: center; border: 2px solid #e5e0d8; border-radius: 12px; overflow: hidden; transition: border-color .2s; }
         .sk-qty-box:focus-within { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
@@ -495,8 +635,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-qty-btn:active:not(:disabled) { transform: scale(0.9); }
         .sk-qty-btn:disabled { opacity: .3; cursor: not-allowed; }
         .sk-qty-num { width: 50px; text-align: center; font-size: 16px; font-weight: 800; border-left: 2px solid #e5e0d8; border-right: 2px solid #e5e0d8; height: 42px; line-height: 42px; color: #1a1a1a; font-family: 'Syne', sans-serif; }
-        .sk-qty-total { font-size: 13px; color: #555; margin-left: 4px; }
+        .sk-qty-total { font-size: 13px; color: #555; }
         .sk-qty-total strong { color: #1a1a1a; font-weight: 800; }
+
+        /* ── CTA ── */
         .sk-cta-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
         .sk-btn-cart {
           width: 100%; padding: 15px; background: #1a1a1a; border: 2.5px solid #1a1a1a;
@@ -507,7 +649,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .sk-btn-cart::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); transform: translateX(-100%); transition: transform .5s; }
         .sk-btn-cart:hover:not(:disabled)::after { transform: translateX(100%); }
         .sk-btn-cart:hover:not(:disabled) { background: #333; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
-        .sk-btn-cart:active:not(:disabled) { transform: scale(0.99); }
         .sk-btn-cart:disabled { opacity: .4; cursor: not-allowed; }
         .sk-btn-cart.success { background: #15803d; border-color: #15803d; animation: popIn .35s ease; }
         .sk-btn-buy {
@@ -517,7 +658,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           transition: all .22s; box-shadow: 0 4px 18px rgba(184,134,11,.35);
         }
         .sk-btn-buy:hover:not(:disabled) { box-shadow: 0 8px 28px rgba(184,134,11,.5); transform: translateY(-2px); }
-        .sk-btn-buy:active:not(:disabled) { transform: scale(0.99); }
         .sk-btn-buy:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
         .sk-btn-wish {
           width: 100%; padding: 12px; background: #fff; border: 2px solid #e5e0d8;
@@ -527,38 +667,48 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         }
         .sk-btn-wish:hover { border-color: #c8a060; color: #8b6914; background: #fdf9f0; }
         .sk-btn-wish.active { border-color: #ef4444; color: #dc2626; background: #fff5f5; }
-        .sk-badges { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 0; flex-wrap: wrap; border-top: 1px solid #ede9e0; border-bottom: 1px solid #ede9e0; margin-bottom: 18px; }
-        .sk-badge { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #777; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: #faf8f4; border: 1px solid #ede9e0; }
+
+        /* Trust badges */
+        .sk-badges {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 14px 0; flex-wrap: wrap;
+          border-top: 1px solid #ede9e0; border-bottom: 1px solid #ede9e0; margin-bottom: 18px;
+        }
+        .sk-badge {
+          display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #777;
+          font-weight: 600; padding: 5px 10px; border-radius: 8px;
+          background: #faf8f4; border: 1px solid #ede9e0;
+        }
+
+        /* Seller box */
         .sk-seller { background: #faf8f4; border: 1px solid #ede9e0; border-radius: 13px; padding: 14px; margin-bottom: 16px; }
         .sk-seller-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
         .sk-seller-row + .sk-seller-row { border-top: 1px solid #f0ede8; }
         .sk-seller-key { color: #888; }
         .sk-seller-val { font-weight: 700; color: #8b6914; }
         .sk-seller-val.green { color: #15803d; }
-        .sk-summary-bar { background: linear-gradient(135deg, #fdf9f0, #faf3dd); border: 1.5px solid #e8d898; border-radius: 11px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #8b6914; display: flex; align-items: center; gap: 8px; }
+
         .sk-oos { background: #fff5f5; border: 1.5px solid #fecaca; border-radius: 13px; padding: 14px; text-align: center; color: #dc2626; font-size: 14px; font-weight: 700; margin-bottom: 18px; }
+
+        /* ── TABS ── */
         .tab-section { max-width: 1120px; margin: 0 auto 16px; }
-        .sk-tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ede9e0; border-radius: 0; overflow: hidden; }
-        .sk-tab-btn { flex: 1; padding: 14px 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; transition: all .2s; font-family: inherit; margin-bottom: -2px; }
+        .sk-tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ede9e0; overflow: hidden; }
+        .sk-tab-btn { flex: 1; padding: 14px 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; transition: all .2s; font-family: inherit; margin-bottom: -2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .sk-tab-btn.active { color: #b8860b; border-bottom-color: #b8860b; background: #fdf9f0; }
         .sk-tab-btn:hover:not(.active) { color: #1a1a1a; background: #f5f2ec; }
         .sk-tab-content { background: #fff; padding: 24px 20px; font-size: 14px; color: #555; line-height: 1.85; animation: fadeUp .22s ease; border-bottom: 1px solid #ede9e0; }
         .sk-ship-row { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0ede8; }
         .sk-ship-row:last-child { border-bottom: none; }
+
+        /* ── MORE PRODUCTS ── */
         .sk-more-wrap { max-width: 1120px; margin: 24px auto 40px; padding: 0 12px; }
         .sk-more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
-        .sk-more-card { background: #fff; border: 1.5px solid #ede9e0; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; transition: all .22s cubic-bezier(.34,1.56,.64,1); }
+        .sk-more-card { background: #fff; border: 1.5px solid #ede9e0; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; transition: all .22s cubic-bezier(.34,1.56,.64,1); display: block; }
         .sk-more-card:hover { border-color: #b8860b; transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
         .sk-more-img { width: 100%; aspect-ratio: 1; background: #f2efe9; position: relative; }
         .sk-more-body { padding: 11px; }
         .sk-more-name { font-size: 12.5px; line-height: 1.4; color: #1a1a1a; margin-bottom: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
         .sk-more-price { font-size: 14px; font-weight: 900; color: #b8860b; font-family: 'Syne', sans-serif; }
-        .sk-swatch-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
-        .sk-mini-swatch { width: 30px; height: 30px; border-radius: 8px; border: 2.5px solid transparent; cursor: pointer; transition: all .2s cubic-bezier(.34,1.56,.64,1); position: relative; }
-        .sk-mini-swatch:hover { transform: scale(1.15); box-shadow: 0 3px 10px rgba(0,0,0,.2); }
-        .sk-mini-swatch.selected { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.25); transform: scale(1.1); }
-        .sk-mini-swatch:disabled { opacity: .3; cursor: not-allowed; transform: none !important; }
-        .sk-mini-swatch .mini-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,.5); animation: checkIn .2s ease; }
       `}</style>
 
       {/* ── NAV ── */}
@@ -592,27 +742,86 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
           {/* ── GALLERY ── */}
           <div className="sk-gallery">
-            <div className="sk-img-main">
-              {allImages[selectedImage]
-                ? <Image key={selectedImage} src={colorImage || allImages[selectedImage]} alt={product.name} fill style={{ objectFit: 'cover' }} className="slide-anim" priority />
-                : <div style={{ width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:64 }}>📦</div>
-              }
-              {discount > 0 && <div className="sk-disc-ribbon">−{discount}% OFF</div>}
-              {product.is_featured && <div className="sk-feat-pill">★ Featured</div>}
-              {allImages.length > 1 && (
-                <>
-                  <button className="gal-arrow left" onClick={() => setSelectedImage(p => Math.max(0, p - 1))} disabled={selectedImage === 0}>
-                    <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
-                  </button>
-                  <button className="gal-arrow right" onClick={() => setSelectedImage(p => Math.min(allImages.length - 1, p + 1))} disabled={selectedImage === allImages.length - 1}>
-                    <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
-                  </button>
+            {/* Touch-enabled wrapper */}
+            <div
+              className="gallery-touch-wrap"
+              ref={galleryRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div className="sk-img-main">
+                {allImages[selectedImage]
+                  ? <Image
+                      key={selectedImage}
+                      src={colorImage || allImages[selectedImage]}
+                      alt={product.name}
+                      fill
+                      style={{ objectFit: 'cover' }}
+                      className="slide-anim"
+                      priority
+                    />
+                  : <div style={{ width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:64 }}>📦</div>
+                }
+                {discount > 0 && <div className="sk-disc-ribbon">−{discount}% OFF</div>}
+                {product.is_featured && <div className="sk-feat-pill">★ Featured</div>}
+
+                {/* Desktop arrow buttons (hidden on mobile via CSS) */}
+                {allImages.length > 1 && (
+                  <>
+                    <button
+                      className="gal-arrow left"
+                      onClick={() => goToImage(selectedImage - 1)}
+                      disabled={selectedImage === 0}
+                      aria-label="Previous image"
+                    >
+                      <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/>
+                      </svg>
+                    </button>
+                    <button
+                      className="gal-arrow right"
+                      onClick={() => goToImage(selectedImage + 1)}
+                      disabled={selectedImage === allImages.length - 1}
+                      aria-label="Next image"
+                    >
+                      <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                  </>
+                )}
+
+                {/* Dots (both mobile & desktop) */}
+                {allImages.length > 1 && (
                   <div className="gal-dots">
-                    {allImages.map((_, i) => <button key={i} className={`gal-dot${selectedImage === i ? ' active' : ''}`} onClick={() => setSelectedImage(i)} />)}
+                    {allImages.map((_, i) => (
+                      <button
+                        key={i}
+                        className={`gal-dot${selectedImage === i ? ' active' : ''}`}
+                        onClick={() => goToImage(i)}
+                        aria-label={`Image ${i + 1}`}
+                      />
+                    ))}
                   </div>
-                </>
-              )}
+                )}
+
+                {/* Mobile swipe hint — only show when multiple images */}
+                {allImages.length > 1 && (
+                  <div className="swipe-hint" style={{ bottom: allImages.length > 1 ? 36 : 12 }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+                    </svg>
+                    Swipe
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Thumbnails */}
             {allImages.length > 1 && (
               <div className="sk-thumbs">
                 {allImages.map((img, i) => (
@@ -659,20 +868,25 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               )}
             </div>
 
-            {/* Sizes */}
+            {/* ── SIZES — horizontal scroll on mobile, wrap on desktop ── */}
             {availableSizes.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 4 }}>
                 <div className="sk-section-title">
                   Size:{selectedSize && <span className="selected-val">{selectedSize} inches</span>}
                 </div>
-                <div className="sk-size-grid">
+                {/* Horizontal scrollable row on mobile */}
+                <div className="sk-size-scroll">
                   {availableSizes.map(size => {
                     const available = isSizeAvailable(size)
-                    const price = priceForSize(size)
+                    const price     = priceForSize(size)
                     const isSelected = selectedSize === size
                     return (
-                      <button key={size} className={`sk-size-box${isSelected ? ' selected' : ''}`}
-                        disabled={!available} onClick={() => handleSizeSelect(size)}>
+                      <button
+                        key={size}
+                        className={`sk-size-box${isSelected ? ' selected' : ''}`}
+                        disabled={!available}
+                        onClick={() => handleSizeSelect(size)}
+                      >
                         {isSelected && <span className="size-check">✓</span>}
                         <span className="size-label">{size}"</span>
                         {price !== null && <span className="size-price">₹{price.toLocaleString('en-IN')}</span>}
@@ -684,15 +898,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            {/* Colors */}
+            {/* ── COLORS ── */}
             {availableColors.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 18 }}>
                 <div className="sk-section-title">
                   Color:{selectedColor && <span className="selected-val">{selectedColor}</span>}
                 </div>
                 <div className="sk-color-dropdown-wrap" ref={colorDropRef}>
-                  <button className={`sk-color-trigger${colorDropOpen ? ' open' : ''}`}
-                    onClick={() => setColorDropOpen(o => !o)} type="button">
+                  <button
+                    className={`sk-color-trigger${colorDropOpen ? ' open' : ''}`}
+                    onClick={() => setColorDropOpen(o => !o)}
+                    type="button"
+                  >
                     <span className="color-swatch" style={{ background: selectedColorHex }} />
                     <span className="color-name">{selectedColor || 'Select color'}</span>
                     {colorsCount > 1 && <span className="color-count">{colorsCount} colors</span>}
@@ -707,8 +924,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                         const available = isColorAvailable(color)
                         const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
                         return (
-                          <button key={color} className={`sk-color-option${isSelected ? ' selected' : ''}`}
-                            disabled={!available} onClick={() => handleColorSelect(color)}>
+                          <button
+                            key={color}
+                            className={`sk-color-option${isSelected ? ' selected' : ''}`}
+                            disabled={!available}
+                            onClick={() => handleColorSelect(color)}
+                          >
                             <span className="opt-swatch" style={{ background: hex, opacity: available ? 1 : .4 }} />
                             <span className="opt-name">{color}{!available ? ' (OOS)' : ''}</span>
                             {isSelected && <span className="opt-check">✓</span>}
@@ -725,10 +946,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     const available = isColorAvailable(color)
                     const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
                     return (
-                      <button key={color} className={`sk-mini-swatch${isSelected ? ' selected' : ''}`}
-                        disabled={!available} title={color}
+                      <button
+                        key={color}
+                        className={`sk-mini-swatch${isSelected ? ' selected' : ''}`}
+                        disabled={!available}
+                        title={color}
                         onClick={() => handleColorSelect(color)}
-                        style={{ background: hex }} type="button">
+                        style={{ background: hex }}
+                        type="button"
+                      >
                         {isSelected && <span className="mini-check">✓</span>}
                       </button>
                     )
@@ -747,7 +973,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            {/* ── FIX: Smart stock indicator ── */}
+            {/* Stock */}
             <div className={`sk-stock ${stockLabel.cls}`}>
               <div className="sk-stock-dot" style={{
                 background: stockLabel.cls === 'oos' ? '#dc2626' : stockLabel.cls === 'low-stock' ? '#ea580c' : '#15803d',
@@ -756,7 +982,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               {stockLabel.text}
             </div>
 
-            {/* Qty + CTA — shown unless truly OOS */}
+            {/* Qty + CTA */}
             {stockLabel.cls !== 'oos' && (
               <>
                 <div className="sk-qty-row">
@@ -764,7 +990,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   <div className="sk-qty-box">
                     <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.max(1, p - 1))} disabled={quantity <= 1}>−</button>
                     <div className="sk-qty-num">{quantity}</div>
-                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(Math.max(stock,1), p + 1))} disabled={quantity >= Math.max(stock,1)}>+</button>
+                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(Math.max(stock, 1), p + 1))} disabled={quantity >= Math.max(stock, 1)}>+</button>
                   </div>
                   <span className="sk-qty-total">
                     Total: <strong>₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits:0 })}</strong>
@@ -812,7 +1038,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               ))}
             </div>
 
-            {/* Seller box */}
+            {/* Seller */}
             <div className="sk-seller">
               {[
                 {k:'Sold by',v:'Shazfa Kraft',cls:''},
