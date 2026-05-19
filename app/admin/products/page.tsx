@@ -10,6 +10,7 @@ interface ProductVariant {
   price: number; compare_price: number | null; cost_price: number | null
   inventory_quantity: number; options: { size_inches?: string; color?: string }
   position: number; is_active: boolean; image_url?: string | null
+  color_hex?: string | null
 }
 interface Product {
   id: string; name: string; slug: string; description: string
@@ -37,6 +38,11 @@ const COLOR_OPTIONS = [
   { name: 'Bronze',    hex: '#a0714f' },
   { name: 'White',     hex: '#e8e8e8' },
 ]
+/* Fallback hex map for swatches in the table */
+const COLOR_HEX: Record<string, string> = {
+  gold: '#d4a843', silver: '#c0c0c0', black: '#1a1a1a',
+  white: '#f5f5f0', 'rose gold': '#b76e79', bronze: '#cd7f32',
+}
 const EMPTY_FORM = {
   name: '', slug: '', description: '', short_description: '', sku: '',
   price: 0, compare_price: 0, category_id: '', main_image_url: '',
@@ -67,386 +73,175 @@ const CSS = `
     --font: 'Instrument Sans', system-ui, sans-serif;
     --serif: 'Instrument Serif', Georgia, serif;
   }
-
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
-
   .products-root { font-family: var(--font); color: var(--ink); }
-
   /* ── STAT CARDS ── */
   .stat-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
   @media (max-width: 1100px) { .stat-grid { grid-template-columns: repeat(3,1fr); } }
   @media (max-width: 700px)  { .stat-grid { grid-template-columns: repeat(2,1fr); } }
-
   .stat-card {
-    background: white;
-    border: 1px solid var(--sand-200);
-    border-radius: var(--radius);
-    padding: 16px 18px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    transition: box-shadow .18s, transform .18s;
+    background: white; border: 1px solid var(--sand-200);
+    border-radius: var(--radius); padding: 16px 18px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; transition: box-shadow .18s, transform .18s;
   }
   .stat-card:hover { box-shadow: 0 4px 18px rgba(0,0,0,.07); transform: translateY(-1px); }
-  .stat-label {
-    font-size: 10px; font-weight: 700; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--sand-400); margin-bottom: 6px;
-  }
+  .stat-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--sand-400); margin-bottom: 6px; }
   .stat-value { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -.03em; }
   .stat-sub { font-size: 11px; color: var(--sand-400); margin-top: 4px; font-weight: 500; }
-  .stat-icon {
-    width: 36px; height: 36px;
-    border-radius: 9px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px;
-    flex-shrink: 0;
-  }
-
+  .stat-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
   /* ── PAGE HEADER ── */
-  .page-header {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
-  }
-  .page-title {
-    font-family: var(--serif);
-    font-size: 26px; letter-spacing: -.02em; color: var(--ink);
-    line-height: 1;
-  }
+  .page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .page-title { font-family: var(--serif); font-size: 26px; letter-spacing: -.02em; color: var(--ink); line-height: 1; }
   .page-subtitle { font-size: 12.5px; color: var(--sand-400); margin-top: 4px; font-weight: 500; }
-
   /* ── BUTTONS ── */
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-    font-family: var(--font); font-size: 13px; font-weight: 600;
-    border-radius: 8px; cursor: pointer; border: none; outline: none;
-    transition: all .18s; letter-spacing: -.01em; white-space: nowrap;
-  }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-family: var(--font); font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; border: none; outline: none; transition: all .18s; letter-spacing: -.01em; white-space: nowrap; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
-  .btn-primary {
-    background: var(--ink); color: white;
-    padding: 9px 16px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.12);
-  }
+  .btn-primary { background: var(--ink); color: white; padding: 9px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
   .btn-primary:hover:not(:disabled) { background: var(--sand-800); box-shadow: 0 4px 14px rgba(0,0,0,.18); transform: translateY(-1px); }
-  .btn-ghost {
-    background: white; color: var(--sand-700);
-    border: 1px solid var(--sand-200);
-    padding: 8px 14px;
-  }
+  .btn-ghost { background: white; color: var(--sand-700); border: 1px solid var(--sand-200); padding: 8px 14px; }
   .btn-ghost:hover:not(:disabled) { border-color: var(--sand-300); background: var(--sand-50); }
-  .btn-danger {
-    background: white; color: var(--red);
-    border: 1px solid rgba(220,38,38,.2);
-    padding: 8px 12px;
-  }
+  .btn-danger { background: white; color: var(--red); border: 1px solid rgba(220,38,38,.2); padding: 8px 12px; }
   .btn-danger:hover:not(:disabled) { background: rgba(220,38,38,.05); border-color: rgba(220,38,38,.35); }
   .btn-sm { padding: 6px 11px !important; font-size: 12px !important; }
-  .btn-icon-sm {
-    width: 30px; height: 30px; padding: 0 !important;
-    border-radius: 7px !important;
-    background: white; color: var(--sand-500);
-    border: 1px solid var(--sand-200);
-  }
+  .btn-icon-sm { width: 30px; height: 30px; padding: 0 !important; border-radius: 7px !important; background: white; color: var(--sand-500); border: 1px solid var(--sand-200); }
   .btn-icon-sm:hover { color: var(--ink); border-color: var(--sand-300); }
-
   /* ── INPUTS ── */
-  .inp {
-    display: block; width: 100%;
-    border: 1px solid var(--sand-200);
-    border-radius: 8px;
-    padding: 9px 13px;
-    font-size: 13.5px; font-family: var(--font); color: var(--ink);
-    background: white;
-    outline: none;
-    transition: border-color .15s, box-shadow .15s;
-    line-height: 1.4;
-  }
+  .inp { display: block; width: 100%; border: 1px solid var(--sand-200); border-radius: 8px; padding: 9px 13px; font-size: 13.5px; font-family: var(--font); color: var(--ink); background: white; outline: none; transition: border-color .15s, box-shadow .15s; line-height: 1.4; }
   .inp::placeholder { color: var(--sand-300); }
   .inp:hover { border-color: var(--sand-300); }
   .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lite); }
-  .inp-sm {
-    border: 1px solid var(--sand-200); border-radius: 7px;
-    padding: 5px 9px; font-size: 12px;
-    font-family: var(--font); color: var(--ink);
-    background: white; outline: none; transition: border-color .15s, box-shadow .15s;
-  }
+  .inp-sm { border: 1px solid var(--sand-200); border-radius: 7px; padding: 5px 9px; font-size: 12px; font-family: var(--font); color: var(--ink); background: white; outline: none; transition: border-color .15s, box-shadow .15s; }
   .inp-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-lite); }
   .inp-prefix { position: relative; }
-  .inp-prefix-sym {
-    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-    font-size: 13px; color: var(--sand-400); font-weight: 600; pointer-events: none;
-  }
+  .inp-prefix-sym { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--sand-400); font-weight: 600; pointer-events: none; }
   .inp-prefix .inp { padding-left: 24px; }
-
   /* ── TOGGLE ── */
-  .toggle-wrap {
-    display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none;
-  }
-  .toggle-track {
-    width: 38px; height: 22px; border-radius: 11px;
-    transition: background .2s; flex-shrink: 0; position: relative;
-  }
+  .toggle-wrap { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+  .toggle-track { width: 38px; height: 22px; border-radius: 11px; transition: background .2s; flex-shrink: 0; position: relative; }
   .toggle-track.on  { background: var(--ink); }
   .toggle-track.off { background: var(--sand-200); }
-  .toggle-thumb {
-    position: absolute; top: 3px;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: white; box-shadow: 0 1px 4px rgba(0,0,0,.25);
-    transition: left .2s cubic-bezier(.34,1.56,.64,1);
-  }
+  .toggle-thumb { position: absolute; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: left .2s cubic-bezier(.34,1.56,.64,1); }
   .toggle-track.on  .toggle-thumb { left: 19px; }
   .toggle-track.off .toggle-thumb { left: 3px; }
   .toggle-label { font-size: 13px; font-weight: 500; color: var(--sand-700); }
-
   /* ── SECTION HEADING ── */
-  .section-head {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
-  }
-  .section-head-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .12em; color: var(--sand-400); white-space: nowrap;
-  }
+  .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .section-head-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--sand-400); white-space: nowrap; }
   .section-head-line { flex: 1; height: 1px; background: var(--sand-200); }
   .section-head-icon { font-size: 14px; }
-
   /* ── FORM PANEL ── */
-  .form-panel {
-    background: white;
-    border: 1px solid var(--sand-200);
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 2px 20px rgba(0,0,0,.06);
-    animation: slide-down .3s cubic-bezier(.16,1,.3,1);
-  }
-  @keyframes slide-down {
-    from { opacity: 0; transform: translateY(-12px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .form-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px 22px;
-    border-bottom: 1px solid var(--sand-100);
-    background: var(--sand-50);
-  }
+  .form-panel { background: white; border: 1px solid var(--sand-200); border-radius: 14px; overflow: hidden; box-shadow: 0 2px 20px rgba(0,0,0,.06); animation: slide-down .3s cubic-bezier(.16,1,.3,1); }
+  @keyframes slide-down { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+  .form-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--sand-100); background: var(--sand-50); }
   .form-title { font-family: var(--serif); font-size: 18px; letter-spacing: -.02em; }
   .form-subtitle { font-size: 12px; color: var(--sand-400); margin-top: 2px; }
   .form-body { padding: 24px 22px; }
   .form-section { margin-bottom: 28px; }
   .form-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
   .form-grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
-  @media (max-width: 900px) {
-    .form-grid-4 { grid-template-columns: repeat(2,1fr); }
-  }
-  @media (max-width: 600px) {
-    .form-grid-4, .form-grid-2 { grid-template-columns: 1fr; }
-  }
+  @media (max-width: 900px) { .form-grid-4 { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 600px) { .form-grid-4, .form-grid-2 { grid-template-columns: 1fr; } }
   .form-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--sand-700); margin-bottom: 6px; letter-spacing: -.01em; }
   .form-label .req { color: var(--accent); }
   .col-span-2 { grid-column: span 2; }
   .col-span-4 { grid-column: span 4; }
   .form-toggles { display: flex; flex-wrap: wrap; gap: 20px; padding-top: 16px; border-top: 1px solid var(--sand-100); margin-top: 16px; }
   .form-actions { display: flex; align-items: center; gap: 10px; padding-top: 20px; border-top: 1px solid var(--sand-100); margin-top: 4px; }
-
   /* ── TABLE ── */
-  .table-wrap {
-    background: white;
-    border: 1px solid var(--sand-200);
-    border-radius: 14px;
-    overflow: hidden;
-  }
+  .table-wrap { background: white; border: 1px solid var(--sand-200); border-radius: 14px; overflow: hidden; }
   .tbl { width: 100%; border-collapse: collapse; }
-  .tbl-head th {
-    padding: 12px 16px;
-    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
-    color: var(--sand-400); text-align: left;
-    background: var(--sand-50);
-    border-bottom: 1px solid var(--sand-200);
-    white-space: nowrap;
-  }
+  .tbl-head th { padding: 12px 16px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--sand-400); text-align: left; background: var(--sand-50); border-bottom: 1px solid var(--sand-200); white-space: nowrap; }
   .tbl-head th.right { text-align: right; }
   .tbl-head th.center { text-align: center; }
   .tbl-row { transition: background .15s; }
   .tbl-row:hover { background: var(--sand-50); }
-  .tbl-row td {
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--sand-100);
-    vertical-align: middle;
-    font-size: 13.5px;
-  }
+  .tbl-row td { padding: 13px 16px; border-bottom: 1px solid var(--sand-100); vertical-align: middle; font-size: 13.5px; }
   .tbl-row:last-child td { border-bottom: none; }
-
   /* ── FILTER BAR ── */
-  .filter-bar {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  }
-  .filter-pills {
-    display: flex; align-items: center; gap: 2px;
-    background: white; border: 1px solid var(--sand-200); border-radius: 9px;
-    padding: 3px;
-  }
-  .pill {
-    padding: 5px 13px; border-radius: 7px;
-    font-size: 12.5px; font-weight: 600; cursor: pointer;
-    border: none; background: transparent; color: var(--sand-500);
-    font-family: var(--font); transition: all .15s;
-  }
+  .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .filter-pills { display: flex; align-items: center; gap: 2px; background: white; border: 1px solid var(--sand-200); border-radius: 9px; padding: 3px; }
+  .pill { padding: 5px 13px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--sand-500); font-family: var(--font); transition: all .15s; }
   .pill.active { background: var(--ink); color: white; }
   .pill:not(.active):hover { background: var(--sand-100); color: var(--ink); }
-  .search-box {
-    position: relative; flex: 1; min-width: 180px; max-width: 280px;
-  }
+  .search-box { position: relative; flex: 1; min-width: 180px; max-width: 280px; }
   .search-box svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--sand-400); }
-  .search-input {
-    display: block; width: 100%;
-    border: 1px solid var(--sand-200); border-radius: 8px;
-    padding: 8px 30px 8px 34px;
-    font-size: 13px; font-family: var(--font); color: var(--ink);
-    background: white; outline: none;
-    transition: border-color .15s, box-shadow .15s;
-  }
+  .search-input { display: block; width: 100%; border: 1px solid var(--sand-200); border-radius: 8px; padding: 8px 30px 8px 34px; font-size: 13px; font-family: var(--font); color: var(--ink); background: white; outline: none; transition: border-color .15s, box-shadow .15s; }
   .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lite); }
-  .search-clear {
-    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
-    background: none; border: none; cursor: pointer;
-    color: var(--sand-400); font-size: 14px; line-height: 1; padding: 2px;
-    transition: color .15s;
-  }
+  .search-clear { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--sand-400); font-size: 14px; line-height: 1; padding: 2px; transition: color .15s; }
   .search-clear:hover { color: var(--ink); }
   .result-count { font-size: 12px; color: var(--sand-400); font-weight: 500; margin-left: auto; white-space: nowrap; }
-
   /* ── BADGES / CHIPS ── */
-  .chip {
-    display: inline-flex; align-items: center;
-    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px;
-    white-space: nowrap;
-  }
+  .chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
   .chip-green  { background: rgba(22,163,74,.1);  color: #15803d; }
   .chip-amber  { background: rgba(217,119,6,.1);  color: #b45309; }
   .chip-red    { background: rgba(220,38,38,.1);  color: var(--red); }
   .chip-gray   { background: var(--sand-100); color: var(--sand-600); }
   .chip-ink    { background: var(--ink); color: white; }
-  .size-tag {
-    font-size: 11px; font-weight: 600; padding: 2px 7px;
-    border-radius: 5px; border: 1px solid var(--sand-200);
-    background: var(--sand-50); color: var(--sand-700);
-    white-space: nowrap;
-  }
-  .stock-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 44px; padding: 4px 8px; border-radius: 6px;
-    font-size: 12.5px; font-weight: 700; text-align: center;
-  }
+  .size-tag { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--sand-200); background: var(--sand-50); color: var(--sand-700); white-space: nowrap; }
+  .stock-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 4px 8px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-align: center; }
   .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-
   /* ── IMAGE UPLOAD ZONE ── */
-  .upload-zone {
-    border: 1px dashed var(--sand-200); border-radius: 9px; padding: 14px;
-    background: var(--sand-50); transition: border-color .18s;
-  }
+  .upload-zone { border: 1px dashed var(--sand-200); border-radius: 9px; padding: 14px; background: var(--sand-50); transition: border-color .18s; }
   .upload-zone:hover { border-color: var(--sand-300); }
-  .file-input-label {
-    display: block; cursor: pointer; width: 100%;
-    font-size: 12px; color: var(--sand-500); font-weight: 500;
-  }
-
+  .file-input-label { display: block; cursor: pointer; width: 100%; font-size: 12px; color: var(--sand-500); font-weight: 500; }
   /* ── VARIANT TABLE ── */
   .vtbl { width: 100%; border-collapse: collapse; }
-  .vtbl th {
-    padding: 9px 12px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
-    color: var(--sand-400); text-align: left; white-space: nowrap;
-    background: var(--sand-50); border-bottom: 1px solid var(--sand-200);
-  }
+  .vtbl th { padding: 9px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--sand-400); text-align: left; white-space: nowrap; background: var(--sand-50); border-bottom: 1px solid var(--sand-200); }
   .vtbl td { padding: 8px 10px; border-bottom: 1px solid var(--sand-100); vertical-align: middle; }
   .vtbl tr:last-child td { border-bottom: none; }
   .vtbl tr:hover td { background: var(--sand-50); }
-
   /* ── CHART ── */
-  .chart-card {
-    background: white;
-    border: 1px solid var(--sand-200);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-  }
+  .chart-card { background: white; border: 1px solid var(--sand-200); border-radius: var(--radius); padding: 18px 20px; }
   .chart-title { font-size: 12px; font-weight: 700; color: var(--sand-600); margin-bottom: 14px; text-transform: uppercase; letter-spacing: .08em; }
-
   /* ── EMPTY STATE ── */
-  .empty-state {
-    padding: 64px 32px;
-    text-align: center;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-  }
+  .empty-state { padding: 64px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .empty-icon { font-size: 36px; margin-bottom: 4px; opacity: .5; }
   .empty-title { font-size: 14px; font-weight: 600; color: var(--ink); }
   .empty-sub { font-size: 13px; color: var(--sand-400); }
-
   /* ── TOAST ── */
-  .toast {
-    position: fixed; top: 18px; right: 22px; z-index: 100;
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 18px; border-radius: 10px;
-    font-size: 13.5px; font-weight: 600;
-    color: white;
-    box-shadow: 0 8px 30px rgba(0,0,0,.18);
-    animation: toast-in .25s cubic-bezier(.16,1,.3,1);
-  }
-  @keyframes toast-in {
-    from { opacity: 0; transform: translateY(-8px) scale(.97); }
-    to   { opacity: 1; transform: none; }
-  }
+  .toast { position: fixed; top: 18px; right: 22px; z-index: 100; display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: white; box-shadow: 0 8px 30px rgba(0,0,0,.18); animation: toast-in .25s cubic-bezier(.16,1,.3,1); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(-8px) scale(.97); } to { opacity: 1; transform: none; } }
   .toast.ok  { background: #15803d; }
   .toast.err { background: var(--red); }
-  .toast-icon {
-    width: 22px; height: 22px; border-radius: 50%;
-    background: rgba(255,255,255,.2);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 900; flex-shrink: 0;
-  }
-
+  .toast-icon { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; flex-shrink: 0; }
   /* ── MATRIX TABLE ── */
   .matrix-wrap { overflow-x: auto; }
   .matrix-tbl { border-collapse: collapse; font-size: 12px; }
-  .matrix-tbl th {
-    padding: 8px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .09em; color: var(--sand-400); background: var(--sand-50);
-    border-bottom: 1px solid var(--sand-200); white-space: nowrap;
-  }
+  .matrix-tbl th { padding: 8px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--sand-400); background: var(--sand-50); border-bottom: 1px solid var(--sand-200); white-space: nowrap; }
   .matrix-tbl td { padding: 9px 14px; border-bottom: 1px solid var(--sand-100); vertical-align: middle; }
-
   /* ── EXPAND ROW ── */
   .expand-row td { background: var(--sand-50) !important; border-top: 1px solid var(--sand-200); }
   .expand-label { font-size: 11px; font-weight: 700; color: var(--sand-600); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 10px; }
-
   /* ── VARIANT EDITOR PANEL ── */
-  .ve-panel {
-    border: 1px solid var(--sand-200); border-radius: 10px;
-    overflow: hidden; background: white;
-  }
-  .ve-toolbar {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: 10px; padding: 12px 16px;
-    background: var(--sand-50); border-bottom: 1px solid var(--sand-200);
-  }
+  .ve-panel { border: 1px solid var(--sand-200); border-radius: 10px; overflow: hidden; background: white; }
+  .ve-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: var(--sand-50); border-bottom: 1px solid var(--sand-200); }
   .ve-toolbar-title { font-size: 12.5px; font-weight: 700; color: var(--ink); }
   .ve-toolbar-sub { font-size: 11px; color: var(--sand-400); }
-  .ve-footer {
-    padding: 10px 16px; background: var(--sand-50);
-    border-top: 1px solid var(--sand-200);
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  }
+  .ve-footer { padding: 10px 16px; background: var(--sand-50); border-top: 1px solid var(--sand-200); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .ve-footer-text { font-size: 11.5px; color: var(--sand-500); font-weight: 500; }
-
-  code.sku {
-    font-size: 11.5px; color: var(--sand-600);
-    background: var(--sand-100); border: 1px solid var(--sand-200);
-    padding: 2px 7px; border-radius: 5px; font-family: monospace;
-  }
+  code.sku { font-size: 11.5px; color: var(--sand-600); background: var(--sand-100); border: 1px solid var(--sand-200); padding: 2px 7px; border-radius: 5px; font-family: monospace; }
   .actions-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; opacity: 0; transition: opacity .15s; }
   .tbl-row:hover .actions-cell { opacity: 1; }
-
   .spinner { animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* ── COLOR SWATCH IN TABLE ── */
+  .color-swatch-btn {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
+    cursor: pointer; padding: 0; transition: transform .15s, box-shadow .15s;
+    flex-shrink: 0;
+  }
+  .color-swatch-btn:hover { transform: scale(1.2); }
+  .color-swatch-btn.active {
+    box-shadow: 0 0 0 2px var(--accent);
+    transform: scale(1.15);
+  }
+  /* ── PRICE BY SIZE ── */
+  .pbs-row { display: flex; align-items: center; gap: 6px; }
+  .pbs-size { min-width: 48px; font-size: 10.5px; font-weight: 600; color: var(--sand-500); }
+  .pbs-price { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .pbs-range { font-size: 10px; color: var(--sand-400); }
+  .pbs-compare { font-size: 10px; color: var(--sand-400); text-decoration: line-through; margin-left: 3px; }
 `
 
 /* ─── Toggle ──────────────────────────────────────────────────────────────── */
@@ -487,7 +282,7 @@ function StatCard({ label, value, icon, iconBg, sub }: {
   )
 }
 
-/* ─── Variant Matrix (read-only) ──────────────────────────────────────────── */
+/* ─── Variant Matrix (read-only expanded view) ────────────────────────────── */
 function VariantMatrix({ variants }: { variants: ProductVariant[] }) {
   const sizes  = Array.from(new Set(variants.map(v => v.options?.size_inches).filter(Boolean))) as string[]
   const colors = Array.from(new Set(variants.map(v => v.options?.color).filter(Boolean))) as string[]
@@ -557,7 +352,6 @@ function VariantEditor({ rows, onChange }: { rows: VariantRow[]; onChange: (r: V
   }
   const visible    = rows.filter(r => !r._delete)
   const totalStock = visible.reduce((a, r) => a + r.inventory_quantity, 0)
-
   return (
     <div className="ve-panel">
       <div className="ve-toolbar">
@@ -577,7 +371,6 @@ function VariantEditor({ rows, onChange }: { rows: VariantRow[]; onChange: (r: V
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => addRow()}>+ Custom Row</button>
         </div>
       </div>
-
       {visible.length === 0 ? (
         <div className="empty-state" style={{ padding: '40px 24px' }}>
           <div className="empty-icon">📐</div>
@@ -657,7 +450,8 @@ function VariantEditor({ rows, onChange }: { rows: VariantRow[]; onChange: (r: V
                   </td>
                   {/* Remove */}
                   <td>
-                    <button type="button" onClick={() => remove(row.id)} style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--sand-200)', borderRadius: 6, background: 'white', cursor: 'pointer', color: 'var(--sand-400)', transition: 'all .15s' }}
+                    <button type="button" onClick={() => remove(row.id)}
+                      style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--sand-200)', borderRadius: 6, background: 'white', cursor: 'pointer', color: 'var(--sand-400)', transition: 'all .15s' }}
                       onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(220,38,38,.3)'; }}
                       onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--sand-400)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sand-200)'; }}>
                       <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -671,7 +465,6 @@ function VariantEditor({ rows, onChange }: { rows: VariantRow[]; onChange: (r: V
           </table>
         </div>
       )}
-
       {visible.length > 0 && (
         <div className="ve-footer">
           <span className="ve-footer-text">{visible.length} variant{visible.length !== 1 ? 's' : ''} · {totalStock} units total</span>
@@ -696,19 +489,22 @@ function VariantEditor({ rows, onChange }: { rows: VariantRow[]; onChange: (r: V
 export default function AdminProductsPage() {
   const supabase = createClient()
   const mainImageRef = useRef<HTMLInputElement>(null)
-  const [products,     setProducts]    = useState<Product[]>([])
-  const [categories,   setCategories]  = useState<Category[]>([])
-  const [loading,      setLoading]     = useState(true)
-  const [showForm,     setShowForm]    = useState(false)
-  const [editing,      setEditing]     = useState<Product|null>(null)
-  const [formData,     setFormData]    = useState({...EMPTY_FORM})
-  const [variantRows,  setVariantRows] = useState<VariantRow[]>([])
-  const [saving,       setSaving]      = useState(false)
-  const [expandedId,   setExpandedId]  = useState<string|null>(null)
-  const [search,       setSearch]      = useState('')
-  const [toast,        setToast]       = useState<{ msg: string; ok: boolean }|null>(null)
-  const [statusFilter, setStatusFilter] = useState<'all'|'active'|'draft'|'low'>('all')
-  const [showStats,    setShowStats]   = useState(true)
+
+  const [products,      setProducts]     = useState<Product[]>([])
+  const [categories,    setCategories]   = useState<Category[]>([])
+  const [loading,       setLoading]      = useState(true)
+  const [showForm,      setShowForm]     = useState(false)
+  const [editing,       setEditing]      = useState<Product|null>(null)
+  const [formData,      setFormData]     = useState({...EMPTY_FORM})
+  const [variantRows,   setVariantRows]  = useState<VariantRow[]>([])
+  const [saving,        setSaving]       = useState(false)
+  const [expandedId,    setExpandedId]   = useState<string|null>(null)
+  const [search,        setSearch]       = useState('')
+  const [toast,         setToast]        = useState<{ msg: string; ok: boolean }|null>(null)
+  const [statusFilter,  setStatusFilter] = useState<'all'|'active'|'draft'|'low'>('all')
+  const [showStats,     setShowStats]    = useState(true)
+  /* ★ NEW: tracks which color swatch is selected per product row (keyed by product.id) */
+  const [rowColorPick,  setRowColorPick] = useState<Record<string, string>>({})
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok }); setTimeout(() => setToast(null), 3500)
@@ -835,6 +631,12 @@ export default function AdminProductsPage() {
     return matchSearch && matchFilter
   })
 
+  /* ── Helper: get swatch hex for a color name ────────────────────────────── */
+  const swatchHex = (color: string, variants: ProductVariant[]) => {
+    const v = variants.find(vv => vv.options?.color?.toLowerCase() === color.toLowerCase())
+    return (v as any)?.color_hex || COLOR_HEX[color.toLowerCase()] || '#ccc'
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 280, gap: 14, fontFamily: 'var(--font)' }}>
       <svg className="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--sand-300)" strokeWidth="2.5">
@@ -848,7 +650,6 @@ export default function AdminProductsPage() {
     <>
       <style>{CSS}</style>
       <div className="products-root">
-
         {/* Toast */}
         {toast && (
           <div className={`toast ${toast.ok ? 'ok' : 'err'}`}>
@@ -864,11 +665,7 @@ export default function AdminProductsPage() {
             <p className="page-subtitle">Manage your catalog, variants & inventory</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              className="btn btn-ghost"
-              style={{ fontSize: 12.5 }}
-              onClick={() => setShowStats(s => !s)}
-            >
+            <button className="btn btn-ghost" style={{ fontSize: 12.5 }} onClick={() => setShowStats(s => !s)}>
               {showStats ? 'Hide' : 'Show'} Stats
             </button>
             {!showForm && (
@@ -885,11 +682,11 @@ export default function AdminProductsPage() {
         {/* Stats */}
         {showStats && (
           <div className="stat-grid" style={{ marginBottom: 16 }}>
-            <StatCard label="Total"     value={stats.total}    icon="📦" iconBg="var(--sand-100)" sub="products" />
-            <StatCard label="Active"    value={stats.active}   icon="✅" iconBg="rgba(22,163,74,.1)" sub="published" />
-            <StatCard label="Featured"  value={stats.featured} icon="⭐" iconBg="rgba(217,119,6,.1)" sub="promoted" />
-            <StatCard label="Low Stock" value={stats.lowStock} icon="⚠️" iconBg="rgba(217,119,6,.08)" sub="≤10 units" />
-            <StatCard label="Out of Stock" value={stats.oos}   icon="🚫" iconBg="rgba(220,38,38,.08)" sub="0 units" />
+            <StatCard label="Total"        value={stats.total}    icon="📦" iconBg="var(--sand-100)"           sub="products" />
+            <StatCard label="Active"       value={stats.active}   icon="✅" iconBg="rgba(22,163,74,.1)"        sub="published" />
+            <StatCard label="Featured"     value={stats.featured} icon="⭐" iconBg="rgba(217,119,6,.1)"        sub="promoted" />
+            <StatCard label="Low Stock"    value={stats.lowStock} icon="⚠️" iconBg="rgba(217,119,6,.08)"       sub="≤10 units" />
+            <StatCard label="Out of Stock" value={stats.oos}      icon="🚫" iconBg="rgba(220,38,38,.08)"       sub="0 units" />
           </div>
         )}
 
@@ -901,14 +698,9 @@ export default function AdminProductsPage() {
               <BarChart data={chartData} barSize={24} margin={{ top: 0, right: 0, left: -24, bottom: 0 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 600, fill: 'var(--sand-400)', fontFamily: 'var(--font)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: 'var(--sand-400)' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, border: '1px solid var(--sand-200)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)', boxShadow: '0 4px 16px rgba(0,0,0,.1)' }}
-                  cursor={{ fill: 'rgba(0,0,0,.03)' }}
-                />
+                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--sand-200)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)', boxShadow: '0 4px 16px rgba(0,0,0,.1)' }} cursor={{ fill: 'rgba(0,0,0,.03)' }} />
                 <Bar dataKey="stock" radius={[6, 6, 0, 0]}>
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={i < 3 ? 'var(--ink)' : 'var(--sand-300)'} />
-                  ))}
+                  {chartData.map((_, i) => <Cell key={i} fill={i < 3 ? 'var(--ink)' : 'var(--sand-300)'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -930,9 +722,7 @@ export default function AdminProductsPage() {
                 Close
               </button>
             </div>
-
             <form onSubmit={handleSubmit} className="form-body">
-
               {/* Basic Info */}
               <div className="form-section">
                 <SectionHead label="Basic Information" icon="📝" />
@@ -1121,8 +911,8 @@ export default function AdminProductsPage() {
                   <th>Product</th>
                   <th>SKU</th>
                   <th>Category</th>
-                  <th className="right">Price</th>
-                  <th>Sizes</th>
+                  <th>Price by Size</th>
+                  <th>Sizes & Colors</th>
                   <th className="center">Stock</th>
                   <th className="center">Status</th>
                   <th className="right">Actions</th>
@@ -1148,25 +938,61 @@ export default function AdminProductsPage() {
                     </td>
                   </tr>
                 ) : filtered.map(product => {
-                  const variants   = (product.variants ?? []).filter(v => v.is_active)
-                  const prices     = variants.length ? variants.map(v => v.price) : [product.price]
-                  const minP       = Math.min(...prices)
-                  const maxP       = Math.max(...prices)
-                  const sizes      = Array.from(new Set(variants.map(v => v.options?.size_inches).filter(Boolean))) as string[]
-                  const totalStock = variants.reduce((a, v) => a + v.inventory_quantity, product.inventory_quantity)
-                  const isExpanded = expandedId === product.id
+                  const variants    = (product.variants ?? []).filter(v => v.is_active)
+                  const sizes       = Array.from(new Set(variants.map(v => v.options?.size_inches).filter(Boolean))) as string[]
+                  const colors      = Array.from(new Set(variants.map(v => v.options?.color).filter(Boolean))) as string[]
+                  const totalStock  = variants.reduce((a, v) => a + v.inventory_quantity, product.inventory_quantity)
+                  const isExpanded  = expandedId === product.id
+
+                  /* ── Per-size price map ── */
+                  const sizePriceMap = sizes.map(size => {
+                    const sv     = variants.filter(v => v.options?.size_inches === size)
+                    const prices = sv.map(v => v.price)
+                    const min    = Math.min(...prices)
+                    const max    = Math.max(...prices)
+                    const cp     = sv[0]?.compare_price ?? null
+                    return { size, min, max, cp }
+                  })
+                  /* fallback when no size variants */
+                  const fallbackPrices  = variants.length ? variants.map(v => v.price) : [product.price]
+                  const fallbackMin     = Math.min(...fallbackPrices)
+                  const fallbackMax     = Math.max(...fallbackPrices)
+
+                  /* ── Color → image lookup for this row ── */
+                  const pickedColor  = rowColorPick[product.id] ?? ''
+                  const previewImg   = pickedColor
+                    ? variants.find(v =>
+                        v.options?.color?.toLowerCase() === pickedColor.toLowerCase() &&
+                        v.image_url
+                      )?.image_url ?? null
+                    : null
 
                   return (
                     <Fragment key={product.id}>
                       <tr className="tbl-row">
-                        {/* Product */}
+                        {/* ── Product ── */}
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ width: 42, height: 42, borderRadius: 9, overflow: 'hidden', background: 'var(--sand-100)', flexShrink: 0, border: '1px solid var(--sand-200)' }}>
-                              {product.main_image_url
-                                ? <img src={product.main_image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            {/* Thumbnail: shows color-picked image if available */}
+                            <div style={{ width: 48, height: 48, borderRadius: 9, overflow: 'hidden', background: 'var(--sand-100)', flexShrink: 0, border: '1px solid var(--sand-200)', position: 'relative', transition: 'all .2s' }}>
+                              {(previewImg || product.main_image_url)
+                                ? <img
+                                    key={previewImg || product.main_image_url}
+                                    src={previewImg || product.main_image_url}
+                                    alt={product.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'opacity .25s' }}
+                                  />
                                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
                               }
+                              {/* Small color indicator dot when a color is picked */}
+                              {pickedColor && (
+                                <div style={{
+                                  position: 'absolute', bottom: 2, right: 2,
+                                  width: 10, height: 10, borderRadius: '50%',
+                                  background: swatchHex(pickedColor, variants),
+                                  border: '1.5px solid white', boxShadow: '0 1px 3px rgba(0,0,0,.3)',
+                                }} />
+                              )}
                             </div>
                             <div>
                               <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--ink)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</div>
@@ -1185,28 +1011,118 @@ export default function AdminProductsPage() {
                             </div>
                           </div>
                         </td>
-                        {/* SKU */}
+
+                        {/* ── SKU ── */}
                         <td><code className="sku">{product.sku || '—'}</code></td>
-                        {/* Category */}
-                        <td style={{ fontSize: 13, color: 'var(--sand-600)', fontWeight: 500 }}>{product.categories?.name || <span style={{ color: 'var(--sand-200)' }}>—</span>}</td>
-                        {/* Price */}
-                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontWeight: 700, fontSize: 14 }}>₹{minP.toLocaleString('en-IN')}</span>
-                          {maxP !== minP && <span style={{ fontSize: 11.5, color: 'var(--sand-400)', marginLeft: 3 }}>–{maxP.toLocaleString('en-IN')}</span>}
+
+                        {/* ── Category ── */}
+                        <td style={{ fontSize: 13, color: 'var(--sand-600)', fontWeight: 500 }}>
+                          {product.categories?.name || <span style={{ color: 'var(--sand-200)' }}>—</span>}
                         </td>
-                        {/* Sizes */}
+
+                        {/* ── ★ Price by Size ── */}
                         <td>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {!sizes.length && <span style={{ color: 'var(--sand-200)' }}>—</span>}
-                            {sizes.slice(0, 3).map(s => <span key={s} className="size-tag">{s}"</span>)}
-                            {sizes.length > 3 && <span style={{ fontSize: 11, color: 'var(--sand-400)', fontWeight: 600, alignSelf: 'center' }}>+{sizes.length - 3}</span>}
-                          </div>
+                          {sizePriceMap.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {sizePriceMap.map(({ size, min, max, cp }) => (
+                                <div key={size} className="pbs-row">
+                                  <span className="pbs-size">{size}"</span>
+                                  <span className="pbs-price">
+                                    ₹{min.toLocaleString('en-IN')}
+                                    {max !== min && (
+                                      <span className="pbs-range"> –{max.toLocaleString('en-IN')}</span>
+                                    )}
+                                  </span>
+                                  {cp && cp > min && (
+                                    <span className="pbs-compare">₹{cp.toLocaleString('en-IN')}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            /* Fallback: no size variants */
+                            <div>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>₹{fallbackMin.toLocaleString('en-IN')}</span>
+                              {fallbackMax !== fallbackMin && (
+                                <span style={{ fontSize: 11.5, color: 'var(--sand-400)', marginLeft: 3 }}>–{fallbackMax.toLocaleString('en-IN')}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
-                        {/* Stock */}
+
+                        {/* ── ★ Sizes + Color swatches with image preview ── */}
+                        <td>
+                          {/* Size tags */}
+                          {sizes.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: colors.length ? 8 : 0 }}>
+                              {sizes.slice(0, 3).map(s => (
+                                <span key={s} className="size-tag">{s}"</span>
+                              ))}
+                              {sizes.length > 3 && (
+                                <span style={{ fontSize: 11, color: 'var(--sand-400)', fontWeight: 600, alignSelf: 'center' }}>+{sizes.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                          {!sizes.length && !colors.length && (
+                            <span style={{ color: 'var(--sand-200)' }}>—</span>
+                          )}
+
+                          {/* ★ Color swatches */}
+                          {colors.length > 0 && (
+                            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                              {colors.map(color => {
+                                const hex        = swatchHex(color, variants)
+                                const isSelected = pickedColor.toLowerCase() === color.toLowerCase()
+                                return (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    title={color}
+                                    className={`color-swatch-btn${isSelected ? ' active' : ''}`}
+                                    style={{ background: hex }}
+                                    onClick={() =>
+                                      setRowColorPick(prev => ({
+                                        ...prev,
+                                        [product.id]: isSelected ? '' : color,
+                                      }))
+                                    }
+                                  />
+                                )
+                              })}
+                              {pickedColor && (
+                                <span style={{ fontSize: 10.5, color: 'var(--sand-500)', fontWeight: 600 }}>
+                                  {pickedColor}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ★ Color-driven image preview (small, inline) */}
+                          {previewImg && (
+                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
+                              <img
+                                src={previewImg}
+                                alt={pickedColor}
+                                style={{
+                                  width: 52, height: 52, objectFit: 'cover',
+                                  borderRadius: 8, border: '1.5px solid var(--sand-200)',
+                                  display: 'block',
+                                }}
+                              />
+                              <div>
+                                <div style={{ fontSize: 10, color: 'var(--sand-500)', fontWeight: 600 }}>Preview</div>
+                                <div style={{ fontSize: 11, color: 'var(--sand-700)', fontWeight: 700, marginTop: 2 }}>{pickedColor}</div>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* ── Stock ── */}
                         <td style={{ textAlign: 'center' }}>
                           <span className={`stock-badge ${totalStock <= 0 ? 'chip-red' : totalStock <= 10 ? 'chip-amber' : 'chip-green'}`}>{totalStock}</span>
                         </td>
-                        {/* Status */}
+
+                        {/* ── Status ── */}
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                             <span className={`chip ${product.is_active ? 'chip-green' : 'chip-gray'}`}>
@@ -1216,7 +1132,8 @@ export default function AdminProductsPage() {
                             {product.is_featured && <span className="chip chip-amber">★ Featured</span>}
                           </div>
                         </td>
-                        {/* Actions */}
+
+                        {/* ── Actions ── */}
                         <td>
                           <div className="actions-cell">
                             <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(product)}>
@@ -1234,7 +1151,8 @@ export default function AdminProductsPage() {
                           </div>
                         </td>
                       </tr>
-                      {/* Expanded */}
+
+                      {/* ── Expanded variant matrix ── */}
                       {isExpanded && (
                         <tr>
                           <td colSpan={8} className="expand-row">
@@ -1250,7 +1168,6 @@ export default function AdminProductsPage() {
             </table>
           </div>
         </div>
-
       </div>
     </>
   )
