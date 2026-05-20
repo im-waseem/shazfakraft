@@ -63,14 +63,16 @@ export default function Home() {
   const [currentBanner,      setCurrentBanner]      = useState(0)
   const [addedId,            setAddedId]            = useState<string | null>(null)
   const [visibleCount,       setVisibleCount]       = useState(24)
+  const [guestToast,         setGuestToast]         = useState(false)
 
-  const searchRef  = useRef<HTMLInputElement>(null)
-  const heroRef    = useRef<HTMLElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const heroRef   = useRef<HTMLElement>(null)
 
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function init() {
       const sb = createClient()
+      // Auth is optional — we don't block if no user
       const { data: { user } } = await sb.auth.getUser()
       setUser(user)
       const [b, p, c] = await Promise.all([getBanners(), getFeaturedProducts(), getCategories()])
@@ -135,17 +137,36 @@ export default function Home() {
     try { localStorage.setItem('wishlist', JSON.stringify(next)) } catch {}
   }
 
+  // ── GUEST-FRIENDLY Add to Cart — no login required ──────────────────────────
   const addToCart = (product: any) => {
     try {
       const cart = JSON.parse(localStorage.getItem('cart') || '[]')
       const idx  = cart.findIndex((i: any) => i.productId === product.id)
-      if (idx >= 0) cart[idx].quantity += 1
-      else cart.push({ id: product.id, productId: product.id, name: product.name, price: Number(product.price), quantity: 1, image: product.main_image_url || product.image_url || '' })
+      if (idx >= 0) {
+        cart[idx].quantity += 1
+      } else {
+        cart.push({
+          id:         Date.now().toString(),
+          cartKey:    product.id,
+          productId:  product.id,
+          name:       product.name,
+          price:      Number(product.price),
+          quantity:   1,
+          image:      product.main_image_url || product.image_url || '',
+          sku:        product.sku || '',
+          // size/color will be selected on product detail page
+        })
+      }
       localStorage.setItem('cart', JSON.stringify(cart))
       setCartCount(cart.reduce((s: number, i: any) => s + i.quantity, 0))
     } catch {}
     setAddedId(product.id)
     setTimeout(() => setAddedId(null), 1600)
+    // Show guest nudge once if not logged in
+    if (!user) {
+      setGuestToast(true)
+      setTimeout(() => setGuestToast(false), 3500)
+    }
   }
 
   const announcementTexts = banners.length > 0
@@ -166,7 +187,17 @@ export default function Home() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#fffbf5', fontFamily: "'Nunito', sans-serif", color: '#1c1410' }}>
+    // ↓ KEY FIX: display:flex + flex-direction:column ensures footer is always
+    //   flush to the bottom and the page stretches full width
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      width: '100%',
+      background: '#fffbf5',
+      fontFamily: "'Nunito', sans-serif",
+      color: '#1c1410',
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Nunito:wght@300;400;500;600;700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
@@ -183,7 +214,7 @@ export default function Home() {
         }
 
         /* ── ANNOUNCEMENT ── */
-        .ann-bar{background:linear-gradient(90deg,#5c3209,#c8860a,#5c3209);padding:10px 16px;text-align:center;position:relative;overflow:hidden}
+        .ann-bar{background:linear-gradient(90deg,#5c3209,#c8860a,#5c3209);padding:10px 16px;text-align:center;position:relative;overflow:hidden;width:100%}
         .ann-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);animation:shimmer 3s ease-in-out infinite;background-size:200% 100%}
         @keyframes shimmer{0%,100%{background-position:200% 0}50%{background-position:-200% 0}}
         .ann-text{color:#fff;font-size:12px;font-weight:700;letter-spacing:.07em;position:relative;animation:fadeUp .4s ease}
@@ -192,7 +223,7 @@ export default function Home() {
         .ann-dot.on{background:#fff;width:14px;border-radius:3px}
 
         /* ── NAVBAR ── */
-        .navbar{background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;box-shadow:0 2px 16px rgba(200,134,10,.05)}
+        .navbar{background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;box-shadow:0 2px 16px rgba(200,134,10,.05);width:100%}
         .nav-inner{max-width:1340px;margin:0 auto;padding:0 20px;display:flex;align-items:center;height:62px;gap:16px}
         .logo-mark{font-family:"Cormorant Garamond",serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:-.01em;line-height:1;text-decoration:none}
         .logo-sub{font-size:8px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--t3);display:block;margin-top:-1px}
@@ -212,8 +243,23 @@ export default function Home() {
         .mob-nav-link{display:block;padding:12px 14px;border-radius:10px;color:var(--text);font-weight:600;font-size:15px;text-decoration:none;transition:background .15s}
         .mob-nav-link:hover{background:var(--warm);color:var(--gold)}
 
+        /* ── GUEST TOAST ── */
+        .guest-toast{
+          position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+          background:#1c1410;color:#fff;
+          padding:11px 20px;border-radius:50px;
+          font-size:13px;font-weight:600;
+          box-shadow:0 8px 32px rgba(0,0,0,.25);
+          z-index:200;white-space:nowrap;
+          display:flex;align-items:center;gap:10px;
+          animation:toastIn .3s cubic-bezier(.16,1,.3,1) both;
+        }
+        @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+        .guest-toast a{color:var(--gold);font-weight:800;text-decoration:none}
+        .guest-toast a:hover{text-decoration:underline}
+
         /* ── HERO ── */
-        .hero{background:linear-gradient(160deg,#1c1410 0%,#3d2112 55%,#6b3c12 100%);padding:clamp(52px,8vw,100px) 20px clamp(80px,12vw,140px);text-align:center;position:relative;overflow:hidden}
+        .hero{background:linear-gradient(160deg,#1c1410 0%,#3d2112 55%,#6b3c12 100%);padding:clamp(52px,8vw,100px) 20px clamp(80px,12vw,140px);text-align:center;position:relative;overflow:hidden;width:100%}
         .hero-orb{position:absolute;border-radius:50%;pointer-events:none}
         .hero-eyebrow{font-family:"Cormorant Garamond",serif;font-size:clamp(12px,2vw,14px);color:#d4a843;letter-spacing:.28em;text-transform:uppercase;font-style:italic;margin-bottom:14px}
         .hero-h1{font-family:"Cormorant Garamond",serif;font-size:clamp(2.4rem,6vw,4.8rem);font-weight:700;color:#fff;line-height:1.08;margin-bottom:16px}
@@ -230,7 +276,7 @@ export default function Home() {
         .cat-pill.on{background:var(--gold);border-color:var(--gold);color:#fff}
 
         /* ── CATEGORY GRID ── */
-        .section{max-width:1340px;margin:0 auto;padding:0 20px}
+        .section{max-width:1340px;margin:0 auto;padding:0 20px;width:100%}
         .section-title{font-family:"Cormorant Garamond",serif;font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;color:var(--text)}
         .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;margin-top:20px}
         .cat-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px 12px;text-align:center;cursor:pointer;transition:all .25s;font-family:inherit;color:var(--text);width:100%}
@@ -239,7 +285,7 @@ export default function Home() {
         .cat-card-name{font-size:12px;font-weight:700;line-height:1.3}
 
         /* ── FEATURE STRIP ── */
-        .feature-strip{background:linear-gradient(135deg,#1c1410,#3d2112);padding:32px 20px;margin:40px 0 0}
+        .feature-strip{background:linear-gradient(135deg,#1c1410,#3d2112);padding:32px 20px;width:100%}
         .feature-inner{max-width:1340px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px}
         .feature-item{display:flex;align-items:center;gap:14px;color:#fff}
         .feature-icon{width:44px;height:44px;border-radius:12px;background:rgba(200,134,10,.2);border:1px solid rgba(200,134,10,.3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
@@ -247,6 +293,8 @@ export default function Home() {
         .feature-desc{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px}
 
         /* ── MAIN LAYOUT ── */
+        /* flex:1 on main-wrap makes it grow to fill space, pushing footer down */
+        .page-body{flex:1;width:100%}
         .main-wrap{max-width:1340px;margin:0 auto;padding:32px 20px 72px;display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:start}
         @media(max-width:900px){.main-wrap{grid-template-columns:1fr}.sidebar-desktop{display:none!important}}
 
@@ -319,17 +367,54 @@ export default function Home() {
         .load-more-btn{background:#fff;border:2px solid var(--border2);border-radius:50px;padding:13px 36px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--t2);transition:all .2s;display:block;margin:32px auto 0}
         .load-more-btn:hover{border-color:var(--gold);color:var(--gold)}
 
-        /* ── FOOTER ── */
-        .footer{background:#1c1410;color:#e8d5b0;padding:56px 20px 28px;margin-top:16px}
-        .footer-inner{max-width:1340px;margin:0 auto}
-        .footer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:36px;margin-bottom:44px}
+        /* ══════════════════════════════════════
+           FOOTER FIX — full width, no centering
+        ══════════════════════════════════════ */
+        .footer{
+          background:#1c1410;
+          color:#e8d5b0;
+          padding:56px 20px 28px;
+          /* removed margin-top:16px — use page-body flex:1 instead */
+          width:100%;          /* span full viewport width */
+          flex-shrink:0;       /* never shrink inside flex column */
+        }
+        .footer-inner{max-width:1340px;margin:0 auto;width:100%}
+        .footer-grid{
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+          gap:36px;
+          margin-bottom:44px;
+          width:100%;
+        }
         .footer-logo{font-family:"Cormorant Garamond",serif;font-size:28px;font-weight:700;color:#d4a843;margin-bottom:10px}
         .footer-desc{color:#8a6a4a;font-size:13px;line-height:1.75}
         .footer-head{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#d4a843;margin-bottom:14px}
         .footer-link{color:#7a6050;font-size:13px;text-decoration:none;display:block;margin-bottom:8px;transition:color .18s}
         .footer-link:hover{color:var(--gold)}
-        .footer-bottom{border-top:1px solid rgba(255,255,255,.07);padding-top:22px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+        .footer-bottom{
+          border-top:1px solid rgba(255,255,255,.07);
+          padding-top:22px;
+          display:flex;
+          justify-content:space-between;
+          flex-wrap:wrap;
+          gap:10px;
+          width:100%;
+        }
         .footer-copy{color:#4a3a2a;font-size:12px}
+
+        /* ── GUEST BANNER (below navbar) ── */
+        .guest-banner{
+          background:linear-gradient(90deg,#fef3d8,#fffbf0);
+          border-bottom:1px solid #e8d898;
+          padding:9px 20px;
+          display:flex;align-items:center;justify-content:center;
+          gap:12px;flex-wrap:wrap;
+          font-size:12.5px;color:var(--t2);font-weight:600;
+          width:100%;
+        }
+        .guest-banner a{color:var(--gold);font-weight:800;text-decoration:none;border-bottom:1px solid var(--gold)}
+        .guest-banner a:hover{opacity:.8}
+        .guest-banner-dismiss{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;line-height:1;margin-left:4px}
 
         /* ── WA BUBBLE ── */
         .wa-bubble{position:fixed;bottom:22px;right:18px;width:52px;height:52px;border-radius:50%;background:#25d366;color:#fff;display:flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 8px 24px rgba(37,211,102,.4);z-index:60;font-size:22px;transition:transform .2s}
@@ -398,6 +483,8 @@ export default function Home() {
               </svg>
               {cartCount > 0 && <span className="nav-badge" style={{ background: 'var(--gold)' }}>{cartCount}</span>}
             </Link>
+
+            {/* Auth: show login/profile but NEVER block purchasing */}
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
                 <Link href="/profile" style={{ textDecoration: 'none' }}>
@@ -414,6 +501,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
+              // Guest: show Sign In as optional, not mandatory
               <Link href="/login" style={{ background: 'var(--gold)', color: '#fff', padding: '8px 18px', borderRadius: 50, fontSize: 12, fontWeight: 800, textDecoration: 'none', letterSpacing: '.04em', marginLeft: 6 }}>
                 Sign In
               </Link>
@@ -421,6 +509,11 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* ── Guest nudge banner (only for non-logged-in, dismissible) ─────── */}
+      {!user && (
+        <GuestBanner />
+      )}
 
       {/* ══ MOBILE MENU ═══════════════════════════════════════════════════════ */}
       {mobileMenuOpen && (
@@ -436,250 +529,263 @@ export default function Home() {
                 <span style={{ marginRight: 10 }}>{icon}</span>{label}
               </Link>
             ))}
+            {!user && (
+              <div style={{ marginTop: 12, padding: '14px', background: 'var(--warm)', borderRadius: 10 }}>
+                <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10, fontWeight: 600 }}>Sign in to track orders & save your wishlist</p>
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+                  style={{ background: 'var(--gold)', color: '#fff', display: 'block', textAlign: 'center', padding: '10px', borderRadius: 8, fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>
+                  Sign In / Register
+                </Link>
+                <Link href="/checkout" onClick={() => setMobileMenuOpen(false)}
+                  style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: 'var(--t2)', textDecoration: 'none', marginTop: 6 }}>
+                  Continue as Guest →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="hero" ref={heroRef}>
-        {/* Decorative orbs */}
-        <div className="hero-orb" style={{ top: -100, right: -100, width: 320, height: 320, background: 'rgba(200,134,10,.12)', filter: 'blur(60px)' }} />
-        <div className="hero-orb" style={{ bottom: -80, left: -80, width: 240, height: 240, background: 'rgba(192,78,42,.1)', filter: 'blur(50px)' }} />
-        {/* Geometric lines */}
-        <svg style={{ position: 'absolute', right: '5%', top: '10%', opacity: .08 }} width="200" height="200" viewBox="0 0 200 200" fill="none">
-          <circle cx="100" cy="100" r="90" stroke="#d4a843" strokeWidth="1" />
-          <circle cx="100" cy="100" r="60" stroke="#d4a843" strokeWidth="1" />
-          <circle cx="100" cy="100" r="30" stroke="#d4a843" strokeWidth="1" />
-        </svg>
+      {/* ══ PAGE BODY (flex:1) ════════════════════════════════════════════════ */}
+      <div className="page-body">
 
-        <p className="hero-eyebrow">Your Islamic Lifestyle Store · Bangalore &amp; All India</p>
-        <h1 className="hero-h1">
-          Discover Authentic<br />
-          <span style={{ color: '#d4a843', fontStyle: 'italic' }}>Islamic Products</span>
-        </h1>
-        <p className="hero-sub">Curated with care — books, prayer items, home décor &amp; more, delivered across India.</p>
-
-        {/* Search */}
-        <div className="search-wrap">
-          <svg className="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+        <section className="hero" ref={heroRef}>
+          <div className="hero-orb" style={{ top: -100, right: -100, width: 320, height: 320, background: 'rgba(200,134,10,.12)', filter: 'blur(60px)' }} />
+          <div className="hero-orb" style={{ bottom: -80, left: -80, width: 240, height: 240, background: 'rgba(192,78,42,.1)', filter: 'blur(50px)' }} />
+          <svg style={{ position: 'absolute', right: '5%', top: '10%', opacity: .08 }} width="200" height="200" viewBox="0 0 200 200" fill="none">
+            <circle cx="100" cy="100" r="90" stroke="#d4a843" strokeWidth="1" />
+            <circle cx="100" cy="100" r="60" stroke="#d4a843" strokeWidth="1" />
+            <circle cx="100" cy="100" r="30" stroke="#d4a843" strokeWidth="1" />
           </svg>
-          <input ref={searchRef} type="text" value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search books, prayer mats, tasbih, itar…"
-            className="search-input"
-            onKeyDown={e => e.key === 'Escape' && setSearchQuery('')}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="search-clear">Clear</button>
-          )}
-        </div>
 
-        {/* Quick category pills */}
-        {categories.length > 0 && (
-          <div className="cat-pills">
-            {categories.slice(0, 7).map(c => (
-              <button key={c.id} onClick={() => toggleCategory(c.id)} className={`cat-pill ${selectedCategories.includes(c.id) ? 'on' : ''}`}>
-                {c.name}
-              </button>
-            ))}
+          <p className="hero-eyebrow">Your Islamic Lifestyle Store · Bangalore &amp; All India</p>
+          <h1 className="hero-h1">
+            Discover Authentic<br />
+            <span style={{ color: '#d4a843', fontStyle: 'italic' }}>Islamic Products</span>
+          </h1>
+          <p className="hero-sub">Curated with care — books, prayer items, home décor &amp; more, delivered across India.</p>
+
+          {/* Search */}
+          <div className="search-wrap">
+            <svg className="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input ref={searchRef} type="text" value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search books, prayer mats, tasbih, itar…"
+              className="search-input"
+              onKeyDown={e => e.key === 'Escape' && setSearchQuery('')}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="search-clear">Clear</button>
+            )}
           </div>
-        )}
-      </section>
 
-      {/* ══ FEATURE STRIP ════════════════════════════════════════════════════ */}
-      <div className="feature-strip">
-        <div className="feature-inner">
-          {[
-            { icon: '🚚', label: 'Free Shipping',    desc: 'On orders above ₹499'      },
-            { icon: '✅', label: 'Authentic Products', desc: 'Ethically sourced & verified' },
-            { icon: '🔄', label: 'Easy Returns',      desc: '7-day hassle-free returns'  },
-            { icon: '🔒', label: 'Secure Payments',   desc: 'UPI, cards, net banking'    },
-          ].map(f => (
-            <div key={f.label} className="feature-item">
-              <div className="feature-icon">{f.icon}</div>
-              <div>
-                <p className="feature-label">{f.label}</p>
-                <p className="feature-desc">{f.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ══ CATEGORY SHOWCASE ════════════════════════════════════════════════ */}
-      {categories.length > 0 && !searchQuery && selectedCategories.length === 0 && (
-        <div style={{ padding: '44px 20px 0' }}>
-          <div className="section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 12 }}>
-              <h2 className="section-title">Shop by Category</h2>
-              <Link href="/products" style={{ color: 'var(--gold)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>View all →</Link>
-            </div>
-            <div className="cat-grid">
-              {categories.map((c, i) => (
-                <button key={c.id} onClick={() => { toggleCategory(c.id); heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }}
-                  className="cat-card">
-                  <div className="cat-card-icon">{CAT_ICONS[i % CAT_ICONS.length]}</div>
-                  <p className="cat-card-name">{c.name}</p>
+          {/* Quick category pills */}
+          {categories.length > 0 && (
+            <div className="cat-pills">
+              {categories.slice(0, 7).map(c => (
+                <button key={c.id} onClick={() => toggleCategory(c.id)} className={`cat-pill ${selectedCategories.includes(c.id) ? 'on' : ''}`}>
+                  {c.name}
                 </button>
               ))}
             </div>
+          )}
+        </section>
+
+        {/* ══ FEATURE STRIP ════════════════════════════════════════════════════ */}
+        <div className="feature-strip">
+          <div className="feature-inner">
+            {[
+              { icon: '🚚', label: 'Free Shipping',      desc: 'On orders above ₹499'         },
+              { icon: '✅', label: 'Authentic Products',  desc: 'Ethically sourced & verified'  },
+              { icon: '🔄', label: 'Easy Returns',        desc: '7-day hassle-free returns'     },
+              { icon: '🛒', label: 'Guest Checkout',      desc: 'No account needed to order'    },
+            ].map(f => (
+              <div key={f.label} className="feature-item">
+                <div className="feature-icon">{f.icon}</div>
+                <div>
+                  <p className="feature-label">{f.label}</p>
+                  <p className="feature-desc">{f.desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* ══ MAIN: SIDEBAR + PRODUCTS ══════════════════════════════════════════ */}
-      <div className="main-wrap">
-
-        {/* ── Desktop Sidebar ─────────────────────────────────────────────── */}
-        <aside className="sidebar sidebar-desktop">
-          <SidebarContent {...{ categories, selectedCategories, toggleCategory, priceRange, setPriceRange, maxPrice, hasFilters, clearFilters }} />
-        </aside>
-
-        {/* ── Mobile Sidebar ──────────────────────────────────────────────── */}
-        {mobileSidebarOpen && (
-          <>
-            <div className="mob-sidebar-overlay" onClick={() => setMobileSidebarOpen(false)} />
-            <div className={`mob-sidebar open`}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-                <span style={{ fontWeight: 800, fontSize: 15 }}>Filters</span>
-                <button onClick={() => setMobileSidebarOpen(false)} style={{ background: '#f5f5f5', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        {/* ══ CATEGORY SHOWCASE ════════════════════════════════════════════════ */}
+        {categories.length > 0 && !searchQuery && selectedCategories.length === 0 && (
+          <div style={{ padding: '44px 20px 0', width: '100%' }}>
+            <div className="section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 12 }}>
+                <h2 className="section-title">Shop by Category</h2>
+                <Link href="/products" style={{ color: 'var(--gold)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>View all →</Link>
               </div>
-              <SidebarContent {...{ categories, selectedCategories, toggleCategory, priceRange, setPriceRange, maxPrice, hasFilters, clearFilters: () => { clearFilters(); setMobileSidebarOpen(false) } }} />
-            </div>
-          </>
-        )}
-
-        {/* ── Products ────────────────────────────────────────────────────── */}
-        <main>
-          {/* Toolbar */}
-          <div className="prod-toolbar">
-            <div>
-              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700 }}>
-                {searchQuery
-                  ? <>Results for <span style={{ color: 'var(--gold)' }}>"{searchQuery}"</span></>
-                  : selectedCategories.length > 0
-                    ? categories.find(c => selectedCategories.includes(c.id))?.name || 'Filtered'
-                    : 'All Products'}
-              </p>
-              <p className="prod-count">{filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found</p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Mobile filter */}
-              <button className="mob-filter-btn" onClick={() => setMobileSidebarOpen(true)}>
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M7 12h10M10 20h4" /></svg>
-                Filters {hasFilters && <span style={{ background: 'var(--gold)', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>!</span>}
-              </button>
-              {/* Active category chips */}
-              {selectedCategories.map(id => {
-                const cat = categories.find(c => c.id === id)
-                return cat ? <button key={id} onClick={() => toggleCategory(id)} className="filter-chip">{cat.name} ×</button> : null
-              })}
-              {/* Sort */}
-              <div style={{ position: 'relative' }}>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="sort-sel">
-                  <option value="newest">Newest</option>
-                  <option value="featured">Featured</option>
-                  <option value="price_asc">Price ↑</option>
-                  <option value="price_desc">Price ↓</option>
-                  <option value="name_asc">A–Z</option>
-                </select>
-                <svg style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--t3)' }} width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <div className="cat-grid">
+                {categories.map((c, i) => (
+                  <button key={c.id} onClick={() => { toggleCategory(c.id); heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }}
+                    className="cat-card">
+                    <div className="cat-card-icon">{CAT_ICONS[i % CAT_ICONS.length]}</div>
+                    <p className="cat-card-name">{c.name}</p>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
+        )}
 
-          {/* Grid */}
-          {filteredProducts.length > 0 ? (
+        {/* ══ MAIN: SIDEBAR + PRODUCTS ══════════════════════════════════════════ */}
+        <div className="main-wrap">
+
+          {/* Desktop Sidebar */}
+          <aside className="sidebar sidebar-desktop">
+            <SidebarContent {...{ categories, selectedCategories, toggleCategory, priceRange, setPriceRange, maxPrice, hasFilters, clearFilters }} />
+          </aside>
+
+          {/* Mobile Sidebar */}
+          {mobileSidebarOpen && (
             <>
-              <div className="prod-grid">
-                {filteredProducts.slice(0, visibleCount).map(product => {
-                  const disc     = product.compare_price ? discount(Number(product.price), Number(product.compare_price)) : null
-                  const inWL     = wishlist.includes(product.id)
-                  const outOfStock = product.inventory_quantity === 0
-                  const justAdded  = addedId === product.id
+              <div className="mob-sidebar-overlay" onClick={() => setMobileSidebarOpen(false)} />
+              <div className="mob-sidebar open">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+                  <span style={{ fontWeight: 800, fontSize: 15 }}>Filters</span>
+                  <button onClick={() => setMobileSidebarOpen(false)} style={{ background: '#f5f5f5', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
+                <SidebarContent {...{ categories, selectedCategories, toggleCategory, priceRange, setPriceRange, maxPrice, hasFilters, clearFilters: () => { clearFilters(); setMobileSidebarOpen(false) } }} />
+              </div>
+            </>
+          )}
 
-                  return (
-                    <div key={product.id} className="p-card">
-                      {/* Image */}
-                      <div className="p-img-wrap">
-                        <Link href={`/products/${product.slug}`} style={{ display: 'block', height: '100%' }}>
-                          {product.main_image_url || product.image_url
-                            ? <img src={product.main_image_url || product.image_url} alt={product.name} className="p-img" loading="lazy" />
-                            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>🎁</div>
-                          }
-                        </Link>
-                        {/* Badges */}
-                        {disc && !product.is_featured && <span className="badge-disc">-{disc}%</span>}
-                        {product.is_featured && !disc && <span className="badge-featured">FEATURED</span>}
-                        {outOfStock && (
-                          <div className="badge-oos">
-                            <span style={{ color: 'var(--t3)', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Out of Stock</span>
-                          </div>
-                        )}
-                        {/* Actions overlay */}
-                        {!outOfStock && (
-                          <div className="p-actions">
-                            <button className={`add-btn ${justAdded ? 'added' : ''}`} onClick={() => addToCart(product)}>
-                              {justAdded ? '✓ Added!' : '+ Add to Cart'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
+          {/* Products */}
+          <main>
+            {/* Toolbar */}
+            <div className="prod-toolbar">
+              <div>
+                <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700 }}>
+                  {searchQuery
+                    ? <>Results for <span style={{ color: 'var(--gold)' }}>"{searchQuery}"</span></>
+                    : selectedCategories.length > 0
+                      ? categories.find(c => selectedCategories.includes(c.id))?.name || 'Filtered'
+                      : 'All Products'}
+                </p>
+                <p className="prod-count">{filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button className="mob-filter-btn" onClick={() => setMobileSidebarOpen(true)}>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M7 12h10M10 20h4" /></svg>
+                  Filters {hasFilters && <span style={{ background: 'var(--gold)', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>!</span>}
+                </button>
+                {selectedCategories.map(id => {
+                  const cat = categories.find(c => c.id === id)
+                  return cat ? <button key={id} onClick={() => toggleCategory(id)} className="filter-chip">{cat.name} ×</button> : null
+                })}
+                <div style={{ position: 'relative' }}>
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="sort-sel">
+                    <option value="newest">Newest</option>
+                    <option value="featured">Featured</option>
+                    <option value="price_asc">Price ↑</option>
+                    <option value="price_desc">Price ↓</option>
+                    <option value="name_asc">A–Z</option>
+                  </select>
+                  <svg style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--t3)' }} width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+            </div>
 
-                      {/* Body */}
-                      <Link href={`/products/${product.slug}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-                        <div className="p-body">
-                          {product.categories && <p className="p-cat">{product.categories.name}</p>}
-                          <p className="p-name">{product.name}</p>
-                          <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                            <span className="p-price">{rupees(Number(product.price))}</span>
-                            {disc && <span className="p-compare">{rupees(Number(product.compare_price))}</span>}
-                          </div>
-                          {!outOfStock && product.inventory_quantity > 0 && product.inventory_quantity <= 10 && (
-                            <p className="p-low-stock">Only {product.inventory_quantity} left!</p>
+            {/* Grid */}
+            {filteredProducts.length > 0 ? (
+              <>
+                <div className="prod-grid">
+                  {filteredProducts.slice(0, visibleCount).map(product => {
+                    const disc      = product.compare_price ? discount(Number(product.price), Number(product.compare_price)) : null
+                    const inWL      = wishlist.includes(product.id)
+                    const outOfStock = product.inventory_quantity === 0 ? 'Out of stock' : false
+                    const lowStock   = product.inventory_quantity > 0 && product.inventory_quantity <= 10
+                    const justAdded  = addedId === product.id
+
+                    return (
+                      <div key={product.id} className="p-card">
+                        <div className="p-img-wrap">
+                          <Link href={`/products/${product.slug}`} style={{ display: 'block', height: '100%' }}>
+                            {product.main_image_url || product.image_url
+                              ? <img src={product.main_image_url || product.image_url} alt={product.name} className="p-img" loading="lazy" />
+                              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>🎁</div>
+                            }
+                          </Link>
+                          {disc && !product.is_featured && <span className="badge-disc">-{disc}%</span>}
+                          {product.is_featured && !disc && <span className="badge-featured">FEATURED</span>}
+                          {outOfStock && (
+                            <div className="badge-oos">
+                              <span style={{ color: 'var(--t3)', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Out of Stock</span>
+                            </div>
+                          )}
+                          {/* Add to Cart — works for GUESTS too */}
+                          {!outOfStock && (
+                            <div className="p-actions">
+                              <button className={`add-btn ${justAdded ? 'added' : ''}`} onClick={() => addToCart(product)}>
+                                {justAdded ? '✓ Added!' : '+ Add to Cart'}
+                              </button>
+                            </div>
                           )}
                         </div>
-                      </Link>
 
-                      {/* Wishlist */}
-                      <button className={`wl-btn ${inWL ? 'on' : ''}`} onClick={() => toggleWishlist(product.id)} aria-label="Wishlist">
-                        {inWL ? '❤️' : '🤍'}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+                        <Link href={`/products/${product.slug}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                          <div className="p-body">
+                            {product.categories && <p className="p-cat">{product.categories.name}</p>}
+                            <p className="p-name">{product.name}</p>
+                            <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                              <span className="p-price">{rupees(Number(product.price))}</span>
+                              {disc && <span className="p-compare">{rupees(Number(product.compare_price))}</span>}
+                            </div>
+                            {lowStock && (
+                              <p className="p-low-stock">Only {product.inventory_quantity} left!</p>
+                            )}
+                          </div>
+                        </Link>
 
-              {/* Load more */}
-              {visibleCount < filteredProducts.length && (
-                <button className="load-more-btn" onClick={() => setVisibleCount(v => v + 24)}>
-                  Load more · {filteredProducts.length - visibleCount} remaining
+                        <button className={`wl-btn ${inWL ? 'on' : ''}`} onClick={() => toggleWishlist(product.id)} aria-label="Wishlist">
+                          {inWL ? '❤️' : '🤍'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {visibleCount < filteredProducts.length && (
+                  <button className="load-more-btn" onClick={() => setVisibleCount(v => v + 24)}>
+                    Load more · {filteredProducts.length - visibleCount} remaining
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">{searchQuery ? '🔍' : '📦'}</div>
+                <p className="empty-title">{searchQuery ? 'No results found' : 'No products found'}</p>
+                <p style={{ color: 'var(--t3)', fontSize: 14, marginBottom: 24 }}>
+                  {searchQuery ? `Nothing matched "${searchQuery}". Try another term.` : 'Try clearing your filters.'}
+                </p>
+                <button onClick={clearFilters} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 50, padding: '11px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Clear Filters
                 </button>
-              )}
-            </>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">{searchQuery ? '🔍' : '📦'}</div>
-              <p className="empty-title">{searchQuery ? 'No results found' : 'No products found'}</p>
-              <p style={{ color: 'var(--t3)', fontSize: 14, marginBottom: 24 }}>
-                {searchQuery ? `Nothing matched "${searchQuery}". Try another term.` : 'Try clearing your filters.'}
-              </p>
-              <button onClick={clearFilters} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 50, padding: '11px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Clear Filters
-              </button>
-            </div>
-          )}
-        </main>
-      </div>
+              </div>
+            )}
+          </main>
+        </div>
 
-      {/* ══ FOOTER ════════════════════════════════════════════════════════════ */}
+      </div>{/* end page-body */}
+
+      {/* ══ FOOTER — full width, always at bottom ════════════════════════════ */}
       <footer className="footer">
         <div className="footer-inner">
           <div className="footer-grid">
             <div>
               <p className="footer-logo">Shazfa kraft</p>
               <p className="footer-desc">Your trusted Islamic lifestyle store. Authentic products, ethically sourced and delivered across India.</p>
+              <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(200,134,10,.1)', borderRadius: 10, border: '1px solid rgba(200,134,10,.2)' }}>
+                <p style={{ fontSize: 11, color: '#d4a843', fontWeight: 700, marginBottom: 4 }}>🛒 No Account Needed</p>
+                <p style={{ fontSize: 11, color: '#7a6050' }}>You can browse, add to cart and place orders as a guest. Sign in to track orders.</p>
+              </div>
             </div>
             <div>
               <p className="footer-head">Shop</p>
@@ -692,6 +798,12 @@ export default function Home() {
               {[['/profile', 'My Profile'], ['/orders', 'My Orders'], ['/wishlist', 'Wishlist'], ['/contact', 'Contact Us']].map(([href, label]) => (
                 <Link key={href} href={href} className="footer-link">{label}</Link>
               ))}
+              {!user && (
+                <>
+                  <Link href="/checkout" className="footer-link" style={{ color: 'var(--gold)', fontWeight: 700 }}>Guest Checkout →</Link>
+                  <Link href="/login" className="footer-link">Sign In / Register</Link>
+                </>
+              )}
             </div>
             <div>
               <p className="footer-head">Contact</p>
@@ -712,9 +824,33 @@ export default function Home() {
 
       {/* ══ FLOATING BUTTONS ══════════════════════════════════════════════════ */}
       <button className="scroll-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
-      <a href="https://wa.me/919123456789" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp" title="Chat on WhatsApp">
+      <a href="https://wa.me/919123456789" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
         💬
       </a>
+
+      {/* Guest cart toast */}
+      {guestToast && (
+        <div className="guest-toast">
+          <span>🛒 Added!</span>
+          <span style={{ opacity: .7 }}>|</span>
+          <Link href="/cart">View Cart</Link>
+          <span style={{ opacity: .5 }}>·</span>
+          <Link href="/checkout">Checkout →</Link>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Guest Banner ─────────────────────────────────────────────────────────────
+function GuestBanner() {
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed) return null
+  return (
+    <div className="guest-banner">
+      <span>🛒 Shop without an account — <strong>no sign-up required</strong> to place orders.</span>
+      <Link href="/checkout">Start shopping →</Link>
+      <button className="guest-banner-dismiss" onClick={() => setDismissed(true)} aria-label="Dismiss">×</button>
     </div>
   )
 }

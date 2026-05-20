@@ -30,7 +30,6 @@ const COLOR_HEX: Record<string, string> = {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────────────*/
-/** Get the one variant matching both size AND color */
 function getVariant(variants: Variant[], size: string, color: string): Variant | null {
   return variants.find(v =>
     v.is_active &&
@@ -39,20 +38,17 @@ function getVariant(variants: Variant[], size: string, color: string): Variant |
   ) ?? null
 }
 
-/** ★ Price for a size = price of the first active variant with that size (size drives price) */
 function priceForSize(variants: Variant[], size: string): number | null {
   const v = variants.find(vv => vv.is_active && vv.options.size_inches === size)
   return v?.price ?? null
 }
 
-/** Stock for a size+color combo, or just size if no color given */
 function stockForSize(variants: Variant[], size: string): number {
   return variants
     .filter(v => v.is_active && v.options.size_inches === size)
     .reduce((a, v) => a + v.inventory_quantity, 0)
 }
 
-/** All distinct colors available (optionally scoped to a size) */
 function colorsForSize(variants: Variant[], size: string): string[] {
   return Array.from(new Set(
     variants
@@ -61,7 +57,6 @@ function colorsForSize(variants: Variant[], size: string): string[] {
   )) as string[]
 }
 
-/** All distinct sizes */
 function allSizes(variants: Variant[]): string[] {
   return Array.from(new Set(
     variants.filter(v => v.is_active).map(v => v.options.size_inches).filter(Boolean)
@@ -85,8 +80,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [activeTab,     setActiveTab]     = useState<'description'|'shipping'|'reviews'>('description')
   const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
   const [priceFlash,    setPriceFlash]    = useState(false)
+
+  /* Dropdown open states */
+  const [sizeDropOpen,  setSizeDropOpen]  = useState(false)
   const [colorDropOpen, setColorDropOpen] = useState(false)
 
+  /* Color gallery modal */
+  const [colorGalleryOpen,    setColorGalleryOpen]    = useState(false)
+  const [colorGalleryColor,   setColorGalleryColor]   = useState('')
+  const [colorGalleryImages,  setColorGalleryImages]  = useState<string[]>([])
+  const [colorGalleryIndex,   setColorGalleryIndex]   = useState(0)
+
+  const sizeDropRef  = useRef<HTMLDivElement>(null)
   const colorDropRef = useRef<HTMLDivElement>(null)
   const galleryRef   = useRef<HTMLDivElement>(null)
   const touchStartX  = useRef<number>(0)
@@ -112,10 +117,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         .eq('product_id', data.id).eq('is_active', true).order('position')
       const vList: Variant[] = vData || []
       setVariants(vList)
-      // Default: pick first size, then first color for that size
       if (vList.length > 0) {
-        const sizes     = allSizes(vList)
-        const firstSize = sizes[0] ?? ''
+        const sizes      = allSizes(vList)
+        const firstSize  = sizes[0] ?? ''
         const firstColor = colorsForSize(vList, firstSize)[0] ?? ''
         setSelectedSize(firstSize)
         setSelectedColor(firstColor)
@@ -134,15 +138,26 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   useEffect(() => { fetchProduct() }, [fetchProduct])
 
-  /* Close color dropdown on outside click */
+  /* Close dropdowns on outside click */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (colorDropRef.current && !colorDropRef.current.contains(e.target as Node))
-        setColorDropOpen(false)
+      if (sizeDropRef.current  && !sizeDropRef.current.contains(e.target as Node))  setSizeDropOpen(false)
+      if (colorDropRef.current && !colorDropRef.current.contains(e.target as Node)) setColorDropOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  /* Close gallery on ESC */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setColorGalleryOpen(false)
+      if (e.key === 'ArrowRight') setColorGalleryIndex(i => Math.min(i + 1, colorGalleryImages.length - 1))
+      if (e.key === 'ArrowLeft')  setColorGalleryIndex(i => Math.max(i - 1, 0))
+    }
+    if (colorGalleryOpen) document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [colorGalleryOpen, colorGalleryImages.length])
 
   const flashPrice = () => { setPriceFlash(true); setTimeout(() => setPriceFlash(false), 400) }
 
@@ -150,10 +165,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const sizesAvailable  = allSizes(variants)
   const colorsAvailable = colorsForSize(variants, selectedSize)
 
-  // Exact variant matching size + color
   const selectedVariant = getVariant(variants, selectedSize, selectedColor)
 
-  // ★ PRICE is SIZE-driven
   const sizePrice      = selectedSize ? priceForSize(variants, selectedSize) : null
   const displayPrice   = sizePrice ?? product?.price ?? 0
   const displayCompare = (() => {
@@ -164,7 +177,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const discount = displayCompare && displayCompare > displayPrice
     ? Math.round((1 - displayPrice / displayCompare) * 100) : 0
 
-  // ★ COLOR drives the GALLERY IMAGE — look up the variant's image_url
   const colorVariant = variants.find(v =>
     v.is_active &&
     v.options.color?.toLowerCase() === selectedColor.toLowerCase() &&
@@ -172,16 +184,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   )
   const colorDrivenImage = colorVariant?.image_url ?? null
 
-  // Gallery: product images (static set)
   const allImages = product ? [
     ...(product.main_image_url ? [product.main_image_url] : []),
     ...(product.images?.filter(Boolean) || []),
   ] : []
 
-  // Main displayed image: color-specific if available, else gallery index
   const mainDisplayImage = colorDrivenImage || allImages[selectedImage] || null
 
-  // ★ STOCK: exact variant when both selected, else sum for size
   const stock = (() => {
     if (selectedVariant) return selectedVariant.inventory_quantity
     if (selectedSize)    return stockForSize(variants, selectedSize)
@@ -193,31 +202,34 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     if (!selectedSize && variants.length > 0)
       return { text: 'Select a size to check availability', cls: 'in-stock' }
     if (selectedSize && !selectedColor && colorsAvailable.length > 0)
-      return { text: 'Select a color to confirm stock', cls: 'in-stock' }
-    if (stock <= 0)  return { text: 'Currently Unavailable', cls: 'oos' }
-    if (stock <= 10) return { text: `Only ${stock} left — order soon!`, cls: 'low-stock' }
-    return { text: `In Stock · ${stock} units available`, cls: 'in-stock' }
+      return { text: 'Select a color to confirm', cls: 'in-stock' }
+    return { text: 'In Stock · Available to order', cls: 'in-stock' }
   })()
 
-  const isSizeAvailable = (size: string) =>
-    variants.some(v => v.is_active && v.options.size_inches === size && v.inventory_quantity > 0)
-
-  const isColorAvailable = (color: string) =>
-    variants.some(v =>
-      v.is_active &&
-      v.options.color?.toLowerCase() === color.toLowerCase() &&
-      (!selectedSize || v.options.size_inches === selectedSize) &&
-      v.inventory_quantity > 0
-    )
+  /* ── Color gallery open handler ─────────────────────────────────────────*/
+  const openColorGallery = (color: string) => {
+    // Collect all images for this color across ALL sizes
+    const imgs = variants
+      .filter(v => v.is_active && v.options.color?.toLowerCase() === color.toLowerCase() && v.image_url)
+      .map(v => v.image_url as string)
+    // Deduplicate
+    const unique = Array.from(new Set(imgs))
+    // Also include main product image as first if no images
+    if (unique.length === 0 && product?.main_image_url) unique.push(product.main_image_url)
+    setColorGalleryColor(color)
+    setColorGalleryImages(unique)
+    setColorGalleryIndex(0)
+    setColorGalleryOpen(true)
+  }
 
   /* ── Handlers ────────────────────────────────────────────────────────────*/
   const handleSizeSelect = (size: string) => {
     setSelectedSize(size)
+    setSizeDropOpen(false)
     const newColors  = colorsForSize(variants, size)
     const keepColor  = newColors.find(c => c.toLowerCase() === selectedColor.toLowerCase())
     const nextColor  = keepColor ?? newColors[0] ?? ''
     setSelectedColor(nextColor)
-    // If the new color has an image, reflect it; else reset to main gallery
     const cv = variants.find(v =>
       v.is_active && v.options.size_inches === size &&
       v.options.color?.toLowerCase() === nextColor.toLowerCase()
@@ -229,11 +241,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     flashPrice()
   }
 
-  /** ★ Color selection: update image immediately, no price change */
   const handleColorSelect = (color: string) => {
     setSelectedColor(color)
     setColorDropOpen(false)
-    // Find the variant's image for this color (scoped to current size)
     const cv = variants.find(v =>
       v.is_active &&
       v.options.color?.toLowerCase() === color.toLowerCase() &&
@@ -242,7 +252,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     if (cv?.image_url) {
       const idx = allImages.findIndex(img => img === cv.image_url)
       if (idx > -1) setSelectedImage(idx)
-      // If not in gallery, the colorDrivenImage derived value will show it automatically
     }
   }
 
@@ -283,16 +292,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
     } else {
       cart.push({
         id: Date.now().toString(),
-        cartKey,
-        productId: product.id,
+        cartKey, productId: product.id,
         variantId: selectedVariant?.id ?? null,
-        name: product.name,
-        variantLabel,
-        size: selectedSize,
-        color: selectedColor,
-        price: displayPrice,           // price is SIZE-based
-        quantity,
-        image: colorDrivenImage || product.main_image_url,  // color-specific image
+        name: product.name, variantLabel,
+        size: selectedSize, color: selectedColor,
+        price: displayPrice, quantity,
+        image: colorDrivenImage || product.main_image_url,
         sku: selectedVariant?.sku || product.sku,
       })
     }
@@ -310,7 +315,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   }
 
   const selectedColorHex = swatchHex(selectedColor)
-  const colorsCount      = colorsAvailable.length
 
   /* ─── Loading / Not Found ────────────────────────────────────────────────*/
   if (loading) return (
@@ -341,190 +345,384 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         @keyframes popIn    { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
         @keyframes checkIn  { 0%{transform:scale(0) rotate(-10deg)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
         @keyframes priceFlash { 0%{opacity:0.3;transform:scale(0.96)} 100%{opacity:1;transform:scale(1)} }
-        @keyframes dropDown { from{opacity:0;transform:translateY(-6px) scaleY(0.95)} to{opacity:1;transform:translateY(0) scaleY(1)} }
+        @keyframes dropDown { from{opacity:0;transform:translateY(-8px) scaleY(0.94)} to{opacity:1;transform:translateY(0) scaleY(1)} }
         @keyframes slideImg { from{opacity:0;transform:scale(1.03)} to{opacity:1;transform:scale(1)} }
+        @keyframes modalIn  { from{opacity:0;transform:scale(0.94)} to{opacity:1;transform:scale(1)} }
+        @keyframes overlayIn{ from{opacity:0} to{opacity:1} }
+
         .price-flash { animation: priceFlash 0.35s ease both; }
         .page-enter  { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
         /* NAV */
-        .sk-nav {
-          background: #fff; height: 58px; padding: 0 20px;
-          display: flex; align-items: center; gap: 14px;
-          position: sticky; top: 0; z-index: 100;
-          border-bottom: 1px solid #ede9e0;
-          box-shadow: 0 1px 8px rgba(0,0,0,.06);
-        }
-        .sk-back { width: 36px; height: 36px; border-radius: 10px; border: 1.5px solid #e5e0d8; background: #faf8f4; color: #555; display:flex; align-items:center; justify-content:center; text-decoration:none; transition: all .2s; flex-shrink:0; }
-        .sk-back:hover { background:#fdf5e0; border-color:#d4a843; color:#8b6914; transform:translateX(-1px); }
-        .sk-logo { font-size:18px; font-weight:800; color:#1a1a1a; text-decoration:none; letter-spacing:-.02em; font-family:'Syne',sans-serif; }
-        .sk-logo small { display:block; font-size:8px; font-weight:500; letter-spacing:.16em; color:#aaa; text-transform:uppercase; font-family:'Plus Jakarta Sans',sans-serif; }
-        .sk-cart-btn { margin-left:auto; background:#1a1a1a; color:#fff; border:none; border-radius:10px; padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; display:flex; align-items:center; gap:7px; transition: all .2s; font-family:inherit; }
-        .sk-cart-btn:hover { background:#b8860b; transform:translateY(-1px); box-shadow: 0 4px 14px rgba(184,134,11,.3); }
+        .sk-nav { background:#fff; height:58px; padding:0 20px; display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:100; border-bottom:1px solid #ede9e0; box-shadow:0 1px 8px rgba(0,0,0,.06); }
+        .sk-back { width:36px;height:36px;border-radius:10px;border:1.5px solid #e5e0d8;background:#faf8f4;color:#555;display:flex;align-items:center;justify-content:center;text-decoration:none;transition:all .2s;flex-shrink:0; }
+        .sk-back:hover { background:#fdf5e0;border-color:#d4a843;color:#8b6914;transform:translateX(-1px); }
+        .sk-logo { font-size:18px;font-weight:800;color:#1a1a1a;text-decoration:none;letter-spacing:-.02em;font-family:'Syne',sans-serif; }
+        .sk-logo small { display:block;font-size:8px;font-weight:500;letter-spacing:.16em;color:#aaa;text-transform:uppercase;font-family:'Plus Jakarta Sans',sans-serif; }
+        .sk-cart-btn { margin-left:auto;background:#1a1a1a;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:7px;transition:all .2s;font-family:inherit; }
+        .sk-cart-btn:hover { background:#b8860b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(184,134,11,.3); }
+
         /* BREADCRUMB */
-        .sk-crumb { background:#fff; border-bottom:1px solid #ede9e0; padding:10px 20px; font-size:12px; color:#999; display:flex; align-items:center; gap:5px; overflow-x:auto; white-space:nowrap; }
-        .sk-crumb a { color:#8b6914; text-decoration:none; font-weight:500; }
+        .sk-crumb { background:#fff;border-bottom:1px solid #ede9e0;padding:10px 20px;font-size:12px;color:#999;display:flex;align-items:center;gap:5px;overflow-x:auto;white-space:nowrap; }
+        .sk-crumb a { color:#8b6914;text-decoration:none;font-weight:500; }
         .sk-crumb a:hover { text-decoration:underline; }
+
         /* LAYOUT */
-        .sk-main { max-width: 1120px; margin: 20px auto; display: grid; grid-template-columns: 1fr; background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); border: 1px solid #ede9e0; }
-        @media(min-width: 768px) { .sk-main { grid-template-columns: 500px 1fr; margin: 24px auto; } }
-        @media(min-width: 1024px) { .sk-main { grid-template-columns: 520px 1fr; } }
+        .sk-main { max-width:1120px;margin:20px auto;display:grid;grid-template-columns:1fr;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);border:1px solid #ede9e0; }
+        @media(min-width:768px){ .sk-main { grid-template-columns:500px 1fr;margin:24px auto; } }
+        @media(min-width:1024px){ .sk-main { grid-template-columns:520px 1fr; } }
+
         /* GALLERY */
-        .sk-gallery { background: #f9f7f4; position: relative; }
-        .gallery-touch-wrap { position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-        .sk-img-main { position: relative; aspect-ratio: 1; background: #f2efe9; overflow: hidden; }
-        @media(min-width: 768px) { .sk-img-main { cursor: zoom-in; } }
-        .sk-img-main img { transition: transform 0.4s cubic-bezier(.25,.46,.45,.94); }
-        .sk-img-main:hover img { transform: scale(1.04); }
-        .slide-anim { animation: slideImg 0.3s ease both; }
-        .gal-arrow { display: none; position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.92); cursor: pointer; z-index: 3; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.14); transition: all .18s; backdrop-filter: blur(4px); }
-        @media(min-width: 768px) { .gal-arrow { display: flex; } .gal-arrow:hover { background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2); transform: translateY(-50%) scale(1.08); } .gal-arrow:disabled { opacity: .25; cursor: not-allowed; transform: translateY(-50%); box-shadow: none; } }
-        .gal-arrow.left { left: 12px; } .gal-arrow.right { right: 12px; }
-        .swipe-hint { display: flex; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); align-items: center; gap: 4px; z-index: 4; background: rgba(0,0,0,.45); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 4px 10px; border-radius: 50px; pointer-events: none; backdrop-filter: blur(4px); }
-        @media(min-width: 768px) { .swipe-hint { display: none; } }
-        .gal-dots { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 5px; z-index: 3; }
-        .gal-dot { width: 7px; height: 7px; border-radius: 4px; border: none; cursor: pointer; padding: 0; background: rgba(255,255,255,.5); transition: all .22s; }
-        .gal-dot.active { width: 22px; background: #b8860b; }
-        .sk-thumbs { display: flex; gap: 7px; padding: 12px 14px; background: #faf8f4; border-top: 1px solid #ede9e0; overflow-x: auto; scroll-behavior: smooth; }
-        .sk-thumb { flex-shrink: 0; width: 62px; height: 62px; border-radius: 10px; overflow: hidden; border: 2.5px solid transparent; cursor: pointer; transition: all .2s; background: #ede9e0; }
-        .sk-thumb.active { border-color: #b8860b; box-shadow: 0 0 0 2px rgba(184,134,11,.2); }
-        .sk-thumb:hover:not(.active) { border-color: #c8a060; transform: translateY(-1px); }
-        /* Color-driven image badge */
-        .color-img-badge { position: absolute; bottom: 44px; right: 12px; z-index: 4; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 50px; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 5px; }
-        .sk-disc-ribbon { position: absolute; top: 14px; left: 0; z-index: 4; background: #1a1a1a; color: #fff; font-size: 11px; font-weight: 800; padding: 5px 15px 5px 10px; letter-spacing: .04em; clip-path: polygon(0 0,100% 0,calc(100% - 8px) 50%,100% 100%,0 100%); }
-        .sk-feat-pill { position: absolute; top: 14px; right: 12px; z-index: 4; background: linear-gradient(135deg,#d4a020,#b8860b); color: #fff; font-size: 9.5px; font-weight: 800; padding: 4px 10px; border-radius: 50px; letter-spacing: .07em; text-transform: uppercase; }
-        /* INFO */
-        .sk-info { padding: 20px 16px; overflow-y: auto; }
-        @media(min-width: 768px) { .sk-info { padding: 26px 24px; } }
-        .sk-category-tag { font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; color: #b8860b; margin-bottom: 8px; display: block; }
-        .sk-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; line-height: 1.35; color: #1a1a1a; margin-bottom: 8px; }
-        @media(min-width: 768px) { .sk-title { font-size: 24px; } }
-        .sk-short-desc { font-size: 13.5px; color: #777; line-height: 1.7; margin-bottom: 16px; }
-        .sk-rating { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid #ede9e0; }
-        .sk-stars { color: #c8860a; font-size: 14px; letter-spacing: 2px; }
-        /* Price — size-driven */
-        .sk-price-box { background: linear-gradient(135deg, #fdf9f0 0%, #faf5e6 100%); border: 1px solid #e8d898; border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; }
-        .sk-price-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
-        .sk-price-size-note { font-size: 10px; background: #f0e8cc; color: #8b6914; padding: 2px 8px; border-radius: 50px; font-weight: 700; }
-        .sk-price-main { font-size: 32px; font-weight: 900; color: #1a1a1a; line-height: 1; font-variant-numeric: tabular-nums; font-family: 'Syne', sans-serif; }
-        .sk-price-main sup { font-size: 16px; vertical-align: super; }
-        .sk-price-was { font-size: 13px; color: #bbb; text-decoration: line-through; margin-top: 5px; }
-        .sk-save-badge { display: inline-flex; align-items: center; gap: 4px; background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 50px; margin-top: 8px; border: 1px solid #c8e6c9; }
-        /* SIZE selector */
-        .sk-section-title { font-size: 13px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .sk-section-title .selected-val { color: #b8860b; font-weight: 700; }
-        .sk-section-note { font-size: 11px; color: #aaa; font-weight: 500; }
-        .sk-size-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 18px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
-        .sk-size-scroll::-webkit-scrollbar { height: 3px; }
-        .sk-size-scroll::-webkit-scrollbar-thumb { background: #e0d9cc; border-radius: 2px; }
-        @media(min-width: 768px) { .sk-size-scroll { flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; } }
-        .sk-size-box { position: relative; flex-shrink: 0; scroll-snap-align: start; min-width: 76px; padding: 10px 14px; border: 2px solid #e5e0d8; border-radius: 12px; background: #fff; cursor: pointer; transition: all .2s cubic-bezier(.34,1.56,.64,1); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; outline: none; }
-        .sk-size-box:hover:not(:disabled):not(.selected) { border-color: #c8a060; background: #fdf9f0; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(184,134,11,.14); }
-        .sk-size-box.selected { border-color: #b8860b; background: linear-gradient(135deg, #fdf9f0, #faf3dd); box-shadow: 0 0 0 3px rgba(184,134,11,.18), 0 4px 12px rgba(184,134,11,.14); transform: translateY(-1px); }
-        .sk-size-box:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
-        .sk-size-box .size-label { font-size: 13.5px; font-weight: 800; color: #1a1a1a; white-space: nowrap; }
-        .sk-size-box.selected .size-label { color: #b8860b; }
-        .sk-size-box .size-price { font-size: 11.5px; color: #888; font-weight: 700; white-space: nowrap; }
-        .sk-size-box.selected .size-price { color: #8b6914; }
-        .sk-size-box .size-oos { font-size: 9px; color: #ddd; font-weight: 600; }
-        .sk-size-box .size-check { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: #b8860b; color: #fff; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center; animation: checkIn .25s ease; box-shadow: 0 2px 6px rgba(184,134,11,.4); }
-        /* COLOR DROPDOWN */
-        .sk-color-dropdown-wrap { position: relative; margin-bottom: 8px; }
-        .sk-color-trigger { width: 100%; padding: 11px 14px; border: 2px solid #e5e0d8; border-radius: 12px; background: #fff; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all .2s; font-family: inherit; outline: none; }
-        .sk-color-trigger:hover, .sk-color-trigger.open { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
-        .sk-color-trigger .color-swatch { width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; transition: transform .2s; }
-        .sk-color-trigger:hover .color-swatch { transform: scale(1.1); }
-        .sk-color-trigger .color-name { font-size: 14px; font-weight: 700; color: #1a1a1a; flex: 1; text-align: left; }
-        .sk-color-trigger .color-count { font-size: 12px; color: #aaa; font-weight: 500; }
-        .sk-color-trigger .chevron { width: 18px; height: 18px; color: #aaa; transition: transform .25s; flex-shrink: 0; }
-        .sk-color-trigger.open .chevron { transform: rotate(180deg); }
-        /* COLOR PANEL */
-        .sk-color-panel { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.14); z-index: 50; overflow: hidden; animation: dropDown .22s cubic-bezier(0.16,1,0.3,1) both; transform-origin: top; max-height: 320px; overflow-y: auto; }
-        .sk-color-option { width: 100%; padding: 10px 14px; border: none; background: none; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background .15s; font-family: inherit; text-align: left; }
-        .sk-color-option:hover { background: #fdf9f0; }
-        .sk-color-option.selected { background: linear-gradient(135deg, #fdf9f0, #faf3dd); }
-        .sk-color-option:disabled { opacity: .4; cursor: not-allowed; }
-        .sk-color-option + .sk-color-option { border-top: 1px solid #f0ede8; }
-        /* ★ Color option image preview */
-        .sk-color-opt-img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; border: 1.5px solid #e5e0d8; flex-shrink: 0; background: #f2efe9; }
-        .sk-color-opt-img-placeholder { width: 44px; height: 44px; border-radius: 9px; border: 1.5px solid #e5e0d8; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #f9f7f4; }
-        .sk-color-opt-swatch { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid rgba(0,0,0,.12); flex-shrink: 0; }
-        .sk-color-opt-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-        .sk-color-opt-name { font-size: 13.5px; font-weight: 600; color: #1a1a1a; }
-        .sk-color-option.selected .sk-color-opt-name { color: #b8860b; font-weight: 700; }
-        .sk-color-opt-tag { font-size: 10px; color: #aaa; font-weight: 500; }
-        .opt-check { width: 20px; height: 20px; border-radius: 50%; background: #b8860b; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; animation: checkIn .2s ease; flex-shrink: 0; }
+        .sk-gallery { background:#f9f7f4;position:relative; }
+        .gallery-touch-wrap { position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none; }
+        .sk-img-main { position:relative;aspect-ratio:1;background:#f2efe9;overflow:hidden; }
+        @media(min-width:768px){ .sk-img-main { cursor:zoom-in; } }
+        .sk-img-main img { transition:transform 0.4s cubic-bezier(.25,.46,.45,.94); }
+        .sk-img-main:hover img { transform:scale(1.04); }
+        .slide-anim { animation:slideImg 0.3s ease both; }
+        .gal-arrow { display:none;position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.92);cursor:pointer;z-index:3;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.14);transition:all .18s;backdrop-filter:blur(4px); }
+        @media(min-width:768px){ .gal-arrow { display:flex; } .gal-arrow:hover { background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.2);transform:translateY(-50%) scale(1.08); } .gal-arrow:disabled { opacity:.25;cursor:not-allowed;transform:translateY(-50%);box-shadow:none; } }
+        .gal-arrow.left { left:12px; } .gal-arrow.right { right:12px; }
+        .swipe-hint { display:flex;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);align-items:center;gap:4px;z-index:4;background:rgba(0,0,0,.45);color:#fff;font-size:10px;font-weight:700;letter-spacing:.06em;padding:4px 10px;border-radius:50px;pointer-events:none;backdrop-filter:blur(4px); }
+        @media(min-width:768px){ .swipe-hint { display:none; } }
+        .gal-dots { position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:5px;z-index:3; }
+        .gal-dot { width:7px;height:7px;border-radius:4px;border:none;cursor:pointer;padding:0;background:rgba(255,255,255,.5);transition:all .22s; }
+        .gal-dot.active { width:22px;background:#b8860b; }
+        .sk-thumbs { display:flex;gap:7px;padding:12px 14px;background:#faf8f4;border-top:1px solid #ede9e0;overflow-x:auto;scroll-behavior:smooth; }
+        .sk-thumb { flex-shrink:0;width:62px;height:62px;border-radius:10px;overflow:hidden;border:2.5px solid transparent;cursor:pointer;transition:all .2s;background:#ede9e0; }
+        .sk-thumb.active { border-color:#b8860b;box-shadow:0 0 0 2px rgba(184,134,11,.2); }
+        .sk-thumb:hover:not(.active) { border-color:#c8a060;transform:translateY(-1px); }
+        .color-img-badge { position:absolute;bottom:44px;right:12px;z-index:4;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:50px;backdrop-filter:blur(4px);display:flex;align-items:center;gap:5px; }
+        .sk-disc-ribbon { position:absolute;top:14px;left:0;z-index:4;background:#1a1a1a;color:#fff;font-size:11px;font-weight:800;padding:5px 15px 5px 10px;letter-spacing:.04em;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 50%,100% 100%,0 100%); }
+        .sk-feat-pill { position:absolute;top:14px;right:12px;z-index:4;background:linear-gradient(135deg,#d4a020,#b8860b);color:#fff;font-size:9.5px;font-weight:800;padding:4px 10px;border-radius:50px;letter-spacing:.07em;text-transform:uppercase; }
+
+        /* INFO PANEL */
+        .sk-info { padding:20px 16px;overflow-y:auto; }
+        @media(min-width:768px){ .sk-info { padding:26px 24px; } }
+        .sk-category-tag { font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#b8860b;margin-bottom:8px;display:block; }
+        .sk-title { font-family:'Syne',sans-serif;font-size:20px;font-weight:800;line-height:1.35;color:#1a1a1a;margin-bottom:8px; }
+        @media(min-width:768px){ .sk-title { font-size:24px; } }
+        .sk-short-desc { font-size:13.5px;color:#777;line-height:1.7;margin-bottom:16px; }
+        .sk-rating { display:flex;align-items:center;gap:8px;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid #ede9e0; }
+        .sk-stars { color:#c8860a;font-size:14px;letter-spacing:2px; }
+
+        /* PRICE */
+        .sk-price-box { background:linear-gradient(135deg,#fdf9f0 0%,#faf5e6 100%);border:1px solid #e8d898;border-radius:14px;padding:14px 16px;margin-bottom:18px; }
+        .sk-price-label { font-size:10px;color:#bbb;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:flex;align-items:center;gap:6px; }
+        .sk-price-size-note { font-size:10px;background:#f0e8cc;color:#8b6914;padding:2px 8px;border-radius:50px;font-weight:700; }
+        .sk-price-main { font-size:32px;font-weight:900;color:#1a1a1a;line-height:1;font-variant-numeric:tabular-nums;font-family:'Syne',sans-serif; }
+        .sk-price-main sup { font-size:16px;vertical-align:super; }
+        .sk-price-was { font-size:13px;color:#bbb;text-decoration:line-through;margin-top:5px; }
+        .sk-save-badge { display:inline-flex;align-items:center;gap:4px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:800;padding:4px 12px;border-radius:50px;margin-top:8px;border:1px solid #c8e6c9; }
+
+        /* SECTION TITLE */
+        .sk-section-title { font-size:13px;font-weight:800;color:#1a1a1a;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+        .sk-section-title .selected-val { color:#b8860b;font-weight:700; }
+        .sk-section-note { font-size:11px;color:#aaa;font-weight:500; }
+
+        /* ══════════════════════════════════════════════
+           SIZE DROPDOWN
+        ══════════════════════════════════════════════ */
+        .sk-dropdown-wrap { position:relative;margin-bottom:18px; }
+        .sk-dropdown-trigger {
+          width:100%;padding:12px 16px;
+          border:2px solid #e5e0d8;border-radius:13px;
+          background:#fff;cursor:pointer;
+          display:flex;align-items:center;gap:12px;
+          transition:all .2s;font-family:inherit;outline:none;
+          text-align:left;
+        }
+        .sk-dropdown-trigger:hover,.sk-dropdown-trigger.open { border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.12); }
+        .sk-dropdown-trigger .trigger-icon { font-size:18px;flex-shrink:0; }
+        .sk-dropdown-trigger .trigger-label { flex:1; }
+        .sk-dropdown-trigger .trigger-main { font-size:14px;font-weight:700;color:#1a1a1a;display:block; }
+        .sk-dropdown-trigger .trigger-sub  { font-size:11px;color:#aaa;font-weight:500;display:block;margin-top:1px; }
+        .sk-dropdown-trigger .trigger-badge { background:#f0e8cc;color:#8b6914;font-size:11px;font-weight:700;padding:3px 9px;border-radius:50px;white-space:nowrap; }
+        .sk-dropdown-trigger .chevron { width:18px;height:18px;color:#aaa;transition:transform .25s;flex-shrink:0; }
+        .sk-dropdown-trigger.open .chevron { transform:rotate(180deg); }
+
+        /* SIZE PANEL */
+        .sk-size-panel {
+          position:absolute;top:calc(100% + 6px);left:0;right:0;
+          background:#fff;border:1.5px solid #e5e0d8;border-radius:16px;
+          box-shadow:0 8px 36px rgba(0,0,0,.14);z-index:50;overflow:hidden;
+          animation:dropDown .22s cubic-bezier(0.16,1,0.3,1) both;
+          transform-origin:top;
+        }
+        .sk-size-panel-head { padding:12px 16px 10px;border-bottom:1px solid #f0ede8;background:#faf8f4; }
+        .sk-size-panel-head p { font-size:11px;color:#aaa;font-weight:600;letter-spacing:.04em;text-transform:uppercase; }
+        .sk-size-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;padding:14px; }
+        .sk-size-option {
+          padding:12px 10px;border:2px solid #e5e0d8;border-radius:12px;
+          background:#fff;cursor:pointer;text-align:center;
+          transition:all .2s cubic-bezier(.34,1.56,.64,1);font-family:inherit;outline:none;
+          position:relative;
+        }
+        .sk-size-option:hover:not(:disabled):not(.selected) { border-color:#c8a060;background:#fdf9f0;transform:translateY(-2px);box-shadow:0 4px 12px rgba(184,134,11,.14); }
+        .sk-size-option.selected { border-color:#b8860b;background:linear-gradient(135deg,#fdf9f0,#faf3dd);box-shadow:0 0 0 3px rgba(184,134,11,.18),0 4px 12px rgba(184,134,11,.14);transform:translateY(-1px); }
+        .sk-size-option:disabled { opacity:.35;cursor:not-allowed; }
+        .sk-size-option .so-size { font-size:14px;font-weight:800;color:#1a1a1a;display:block; }
+        .sk-size-option.selected .so-size { color:#b8860b; }
+        .sk-size-option .so-price { font-size:12px;color:#888;font-weight:600;display:block;margin-top:3px; }
+        .sk-size-option.selected .so-price { color:#8b6914; }
+        .sk-size-option .so-oos { font-size:9px;color:#ccc;font-weight:600;display:block;margin-top:2px; }
+        .sk-size-option .so-check { position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:#b8860b;color:#fff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;animation:checkIn .25s ease;box-shadow:0 2px 6px rgba(184,134,11,.4); }
+
+        /* ══════════════════════════════════════════════
+           COLOR DROPDOWN — with full image previews
+        ══════════════════════════════════════════════ */
+        .sk-color-panel {
+          position:absolute;top:calc(100% + 6px);left:0;right:0;
+          background:#fff;border:1.5px solid #e5e0d8;border-radius:16px;
+          box-shadow:0 8px 36px rgba(0,0,0,.14);z-index:50;overflow:hidden;
+          animation:dropDown .22s cubic-bezier(0.16,1,0.3,1) both;
+          transform-origin:top;max-height:420px;overflow-y:auto;
+        }
+        .sk-color-panel-head { padding:12px 16px 10px;border-bottom:1px solid #f0ede8;background:#faf8f4;position:sticky;top:0;z-index:2; }
+        .sk-color-panel-head p { font-size:11px;color:#aaa;font-weight:600;letter-spacing:.04em;text-transform:uppercase; }
+        .sk-color-option-row {
+          display:flex;align-items:center;gap:14px;
+          padding:11px 14px;border:none;background:none;
+          cursor:pointer;width:100%;font-family:inherit;text-align:left;
+          transition:background .15s;
+        }
+        .sk-color-option-row + .sk-color-option-row { border-top:1px solid #f5f2ed; }
+        .sk-color-option-row:hover { background:#fdf9f0; }
+        .sk-color-option-row.selected { background:linear-gradient(135deg,#fdf9f0,#faf3dd); }
+        .sk-color-option-row:disabled { opacity:.4;cursor:not-allowed; }
+
+        /* Color option image strip (shows all images for that color) */
+        .co-img-strip { display:flex;gap:5px;flex-shrink:0; }
+        .co-img-item {
+          width:46px;height:46px;border-radius:9px;overflow:hidden;
+          border:1.5px solid #e5e0d8;background:#f2efe9;flex-shrink:0;
+          position:relative;cursor:pointer;transition:all .18s;
+        }
+        .co-img-item:hover { border-color:#b8860b;transform:scale(1.06); }
+        .co-img-item.main-img { border-color:#c8a060; }
+        .co-img-placeholder { width:46px;height:46px;border-radius:9px;border:1.5px dashed #e5e0d8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:#f9f7f4; }
+
+        /* Color info */
+        .co-swatch { width:18px;height:18px;border-radius:6px;border:1.5px solid rgba(0,0,0,.1);flex-shrink:0; }
+        .co-info { flex:1;display:flex;flex-direction:column;gap:2px; }
+        .co-name { font-size:14px;font-weight:700;color:#1a1a1a; }
+        .sk-color-option-row.selected .co-name { color:#b8860b; }
+        .co-meta { font-size:10.5px;color:#aaa;font-weight:500; }
+        .co-check { width:22px;height:22px;border-radius:50%;background:#b8860b;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;animation:checkIn .2s ease;flex-shrink:0;box-shadow:0 2px 6px rgba(184,134,11,.35); }
+
+        /* View all images button */
+        .co-view-all-btn {
+          display:inline-flex;align-items:center;gap:4px;
+          font-size:10.5px;font-weight:700;color:#b8860b;
+          background:#fdf9f0;border:1px solid #e8d898;border-radius:7px;
+          padding:3px 9px;cursor:pointer;transition:all .15s;white-space:nowrap;
+          font-family:inherit;flex-shrink:0;
+        }
+        .co-view-all-btn:hover { background:#f5e9c0;border-color:#c8a060; }
+
+        /* ══════════════════════════════════════════════
+           COLOR IMAGE GALLERY MODAL
+        ══════════════════════════════════════════════ */
+        .cg-overlay {
+          position:fixed;inset:0;z-index:1000;
+          background:rgba(0,0,0,.88);
+          display:flex;align-items:center;justify-content:center;
+          animation:overlayIn .2s ease;
+          backdrop-filter:blur(8px);
+        }
+        .cg-modal {
+          width:90vw;max-width:700px;
+          background:#1a1a1a;border-radius:20px;
+          overflow:hidden;
+          animation:modalIn .25s cubic-bezier(0.16,1,0.3,1) both;
+          box-shadow:0 24px 80px rgba(0,0,0,.7);
+          border:1px solid rgba(255,255,255,.08);
+          display:flex;flex-direction:column;max-height:90vh;
+        }
+        .cg-header {
+          display:flex;align-items:center;justify-content:space-between;
+          padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.08);
+          background:rgba(255,255,255,.04);flex-shrink:0;
+        }
+        .cg-title { font-size:14px;font-weight:700;color:#fff;display:flex;align-items:center;gap:10px; }
+        .cg-close { width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s; }
+        .cg-close:hover { background:rgba(255,255,255,.15);color:#fff; }
+        .cg-main-img {
+          position:relative;aspect-ratio:1;background:#111;flex-shrink:0;
+          max-height:50vh;
+        }
+        .cg-nav-btn {
+          position:absolute;top:50%;transform:translateY(-50%);
+          width:42px;height:42px;border-radius:50%;border:none;
+          background:rgba(255,255,255,.15);color:#fff;cursor:pointer;
+          display:flex;align-items:center;justify-content:center;
+          transition:all .18s;backdrop-filter:blur(4px);
+          z-index:3;
+        }
+        .cg-nav-btn:hover { background:rgba(255,255,255,.3);transform:translateY(-50%) scale(1.08); }
+        .cg-nav-btn:disabled { opacity:.2;cursor:not-allowed;transform:translateY(-50%); }
+        .cg-nav-btn.left { left:12px; } .cg-nav-btn.right { right:12px; }
+        .cg-counter { position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:50px;backdrop-filter:blur(4px); }
+        .cg-thumbs { display:flex;gap:8px;padding:14px;overflow-x:auto;background:#111;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0; }
+        .cg-thumb {
+          flex-shrink:0;width:64px;height:64px;border-radius:10px;overflow:hidden;
+          border:2.5px solid transparent;cursor:pointer;transition:all .2s;
+          background:#222;
+        }
+        .cg-thumb.active { border-color:#b8860b;box-shadow:0 0 0 2px rgba(184,134,11,.4); }
+        .cg-thumb:hover:not(.active) { border-color:rgba(255,255,255,.3); }
+        .cg-select-btn {
+          margin:14px;padding:12px;border:none;border-radius:12px;
+          background:linear-gradient(135deg,#d4a020,#b8860b);
+          color:#fff;font-size:14px;font-weight:800;
+          cursor:pointer;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;gap:8px;
+          transition:all .2s;flex-shrink:0;
+        }
+        .cg-select-btn:hover { box-shadow:0 6px 20px rgba(184,134,11,.5);transform:translateY(-1px); }
+
         /* Quick swatch row */
-        .sk-color-note { font-size: 10px; color: #aaa; margin-bottom: 10px; display: flex; align-items: center; gap: 4px; }
-        .sk-swatch-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 18px; }
-        .sk-mini-swatch { width: 30px; height: 30px; border-radius: 8px; border: 2.5px solid transparent; cursor: pointer; transition: all .2s cubic-bezier(.34,1.56,.64,1); position: relative; }
-        .sk-mini-swatch:hover { transform: scale(1.15); box-shadow: 0 3px 10px rgba(0,0,0,.2); }
-        .sk-mini-swatch.selected { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.25); transform: scale(1.1); }
-        .sk-mini-swatch:disabled { opacity: .3; cursor: not-allowed; transform: none !important; }
-        .sk-mini-swatch .mini-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,.5); animation: checkIn .2s ease; }
+        .sk-swatch-row { display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px; }
+        .sk-mini-swatch { width:30px;height:30px;border-radius:8px;border:2.5px solid transparent;cursor:pointer;transition:all .2s cubic-bezier(.34,1.56,.64,1);position:relative; }
+        .sk-mini-swatch:hover { transform:scale(1.15);box-shadow:0 3px 10px rgba(0,0,0,.2); }
+        .sk-mini-swatch.selected { border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.25);transform:scale(1.1); }
+        .sk-mini-swatch:disabled { opacity:.3;cursor:not-allowed;transform:none !important; }
+        .sk-mini-swatch .mini-check { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,.5);animation:checkIn .2s ease; }
+
         /* Stock */
-        .sk-stock { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; }
-        .sk-stock.in-stock  { background: #f0fdf4; color: #15803d; }
-        .sk-stock.low-stock { background: #fff7ed; color: #c2410c; }
-        .sk-stock.oos       { background: #fff5f5; color: #dc2626; }
-        .sk-stock-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        /* Selection summary */
-        .sk-summary-bar { background: linear-gradient(135deg, #fdf9f0, #faf3dd); border: 1.5px solid #e8d898; border-radius: 11px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; font-weight: 700; color: #8b6914; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .sk-summary-price { margin-left: auto; font-size: 15px; font-family: 'Syne',sans-serif; color: #1a1a1a; }
-        /* Qty */
-        .sk-qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-        .sk-qty-label { font-size: 13px; font-weight: 700; color: #555; }
-        .sk-qty-box { display: flex; align-items: center; border: 2px solid #e5e0d8; border-radius: 12px; overflow: hidden; transition: border-color .2s; }
-        .sk-qty-box:focus-within { border-color: #b8860b; box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
-        .sk-qty-btn { width: 42px; height: 42px; background: #faf8f4; border: none; font-size: 20px; cursor: pointer; color: #444; display: flex; align-items: center; justify-content: center; transition: all .15s; font-family: inherit; font-weight: 700; }
-        .sk-qty-btn:hover:not(:disabled) { background: #ede9e0; color: #b8860b; }
-        .sk-qty-btn:active:not(:disabled) { transform: scale(0.9); }
-        .sk-qty-btn:disabled { opacity: .3; cursor: not-allowed; }
-        .sk-qty-num { width: 50px; text-align: center; font-size: 16px; font-weight: 800; border-left: 2px solid #e5e0d8; border-right: 2px solid #e5e0d8; height: 42px; line-height: 42px; color: #1a1a1a; font-family: 'Syne', sans-serif; }
-        .sk-qty-total { font-size: 13px; color: #555; }
-        .sk-qty-total strong { color: #1a1a1a; font-weight: 800; }
+        .sk-stock { display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:16px;padding:10px 14px;border-radius:10px; }
+        .sk-stock.in-stock  { background:#f0fdf4;color:#15803d; }
+        .sk-stock.low-stock { background:#fff7ed;color:#c2410c; }
+        .sk-stock.oos       { background:#fff5f5;color:#dc2626; }
+        .sk-stock-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+
+        /* Summary bar */
+        .sk-summary-bar { background:linear-gradient(135deg,#fdf9f0,#faf3dd);border:1.5px solid #e8d898;border-radius:11px;padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:700;color:#8b6914;display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+        .sk-summary-price { margin-left:auto;font-size:15px;font-family:'Syne',sans-serif;color:#1a1a1a; }
+
+        /* QTY */
+        .sk-qty-row { display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap; }
+        .sk-qty-label { font-size:13px;font-weight:700;color:#555; }
+        .sk-qty-box { display:flex;align-items:center;border:2px solid #e5e0d8;border-radius:12px;overflow:hidden;transition:border-color .2s; }
+        .sk-qty-box:focus-within { border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.12); }
+        .sk-qty-btn { width:42px;height:42px;background:#faf8f4;border:none;font-size:20px;cursor:pointer;color:#444;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit;font-weight:700; }
+        .sk-qty-btn:hover:not(:disabled) { background:#ede9e0;color:#b8860b; }
+        .sk-qty-btn:active:not(:disabled) { transform:scale(0.9); }
+        .sk-qty-btn:disabled { opacity:.3;cursor:not-allowed; }
+        .sk-qty-num { width:50px;text-align:center;font-size:16px;font-weight:800;border-left:2px solid #e5e0d8;border-right:2px solid #e5e0d8;height:42px;line-height:42px;color:#1a1a1a;font-family:'Syne',sans-serif; }
+        .sk-qty-total { font-size:13px;color:#555; }
+        .sk-qty-total strong { color:#1a1a1a;font-weight:800; }
+
         /* CTA */
-        .sk-cta-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-        .sk-btn-cart { width: 100%; padding: 15px; background: #1a1a1a; border: 2.5px solid #1a1a1a; border-radius: 13px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 9px; transition: all .22s; position: relative; overflow: hidden; }
-        .sk-btn-cart::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); transform: translateX(-100%); transition: transform .5s; }
-        .sk-btn-cart:hover:not(:disabled)::after { transform: translateX(100%); }
-        .sk-btn-cart:hover:not(:disabled) { background: #333; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
-        .sk-btn-cart:disabled { opacity: .4; cursor: not-allowed; }
-        .sk-btn-cart.success { background: #15803d; border-color: #15803d; animation: popIn .35s ease; }
-        .sk-btn-buy { width: 100%; padding: 14px; background: linear-gradient(135deg, #d4a020 0%, #b8860b 100%); border: none; border-radius: 13px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 9px; transition: all .22s; box-shadow: 0 4px 18px rgba(184,134,11,.35); }
-        .sk-btn-buy:hover:not(:disabled) { box-shadow: 0 8px 28px rgba(184,134,11,.5); transform: translateY(-2px); }
-        .sk-btn-buy:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-        .sk-btn-wish { width: 100%; padding: 12px; background: #fff; border: 2px solid #e5e0d8; border-radius: 13px; font-size: 14px; font-weight: 700; color: #666; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all .2s; }
-        .sk-btn-wish:hover { border-color: #c8a060; color: #8b6914; background: #fdf9f0; }
-        .sk-btn-wish.active { border-color: #ef4444; color: #dc2626; background: #fff5f5; }
+        .sk-cta-stack { display:flex;flex-direction:column;gap:10px;margin-bottom:18px; }
+        .sk-btn-cart { width:100%;padding:15px;background:#1a1a1a;border:2.5px solid #1a1a1a;border-radius:13px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;transition:all .22s;position:relative;overflow:hidden; }
+        .sk-btn-cart::after { content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);transform:translateX(-100%);transition:transform .5s; }
+        .sk-btn-cart:hover:not(:disabled)::after { transform:translateX(100%); }
+        .sk-btn-cart:hover:not(:disabled) { background:#333;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.2); }
+        .sk-btn-cart:disabled { opacity:.4;cursor:not-allowed; }
+        .sk-btn-cart.success { background:#15803d;border-color:#15803d;animation:popIn .35s ease; }
+        .sk-btn-buy { width:100%;padding:14px;background:linear-gradient(135deg,#d4a020 0%,#b8860b 100%);border:none;border-radius:13px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;transition:all .22s;box-shadow:0 4px 18px rgba(184,134,11,.35); }
+        .sk-btn-buy:hover:not(:disabled) { box-shadow:0 8px 28px rgba(184,134,11,.5);transform:translateY(-2px); }
+        .sk-btn-buy:disabled { opacity:.4;cursor:not-allowed;box-shadow:none; }
+        .sk-btn-wish { width:100%;padding:12px;background:#fff;border:2px solid #e5e0d8;border-radius:13px;font-size:14px;font-weight:700;color:#666;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s; }
+        .sk-btn-wish:hover { border-color:#c8a060;color:#8b6914;background:#fdf9f0; }
+        .sk-btn-wish.active { border-color:#ef4444;color:#dc2626;background:#fff5f5; }
+
         /* Trust badges */
-        .sk-badges { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 0; flex-wrap: wrap; border-top: 1px solid #ede9e0; border-bottom: 1px solid #ede9e0; margin-bottom: 18px; }
-        .sk-badge { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #777; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: #faf8f4; border: 1px solid #ede9e0; }
+        .sk-badges { display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 0;flex-wrap:wrap;border-top:1px solid #ede9e0;border-bottom:1px solid #ede9e0;margin-bottom:18px; }
+        .sk-badge { display:flex;align-items:center;gap:5px;font-size:11.5px;color:#777;font-weight:600;padding:5px 10px;border-radius:8px;background:#faf8f4;border:1px solid #ede9e0; }
+
         /* Seller */
-        .sk-seller { background: #faf8f4; border: 1px solid #ede9e0; border-radius: 13px; padding: 14px; margin-bottom: 16px; }
-        .sk-seller-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
-        .sk-seller-row + .sk-seller-row { border-top: 1px solid #f0ede8; }
-        .sk-seller-key { color: #888; }
-        .sk-seller-val { font-weight: 700; color: #8b6914; }
-        .sk-seller-val.green { color: #15803d; }
-        .sk-oos { background: #fff5f5; border: 1.5px solid #fecaca; border-radius: 13px; padding: 14px; text-align: center; color: #dc2626; font-size: 14px; font-weight: 700; margin-bottom: 18px; }
+        .sk-seller { background:#faf8f4;border:1px solid #ede9e0;border-radius:13px;padding:14px;margin-bottom:16px; }
+        .sk-seller-row { display:flex;justify-content:space-between;font-size:13px;padding:5px 0; }
+        .sk-seller-row+.sk-seller-row { border-top:1px solid #f0ede8; }
+        .sk-seller-key { color:#888; }
+        .sk-seller-val { font-weight:700;color:#8b6914; }
+        .sk-seller-val.green { color:#15803d; }
+        .sk-oos { background:#fff5f5;border:1.5px solid #fecaca;border-radius:13px;padding:14px;text-align:center;color:#dc2626;font-size:14px;font-weight:700;margin-bottom:18px; }
+
         /* Tabs */
-        .tab-section { max-width: 1120px; margin: 0 auto 16px; }
-        .sk-tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ede9e0; overflow: hidden; }
-        .sk-tab-btn { flex: 1; padding: 14px 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; transition: all .2s; font-family: inherit; margin-bottom: -2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sk-tab-btn.active { color: #b8860b; border-bottom-color: #b8860b; background: #fdf9f0; }
-        .sk-tab-btn:hover:not(.active) { color: #1a1a1a; background: #f5f2ec; }
-        .sk-tab-content { background: #fff; padding: 24px 20px; font-size: 14px; color: #555; line-height: 1.85; animation: fadeUp .22s ease; border-bottom: 1px solid #ede9e0; }
-        .sk-ship-row { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f0ede8; }
-        .sk-ship-row:last-child { border-bottom: none; }
+        .tab-section { max-width:1120px;margin:0 auto 16px; }
+        .sk-tab-bar { display:flex;background:#fff;border-bottom:2px solid #ede9e0;overflow:hidden; }
+        .sk-tab-btn { flex:1;padding:14px 10px;font-size:13.5px;font-weight:700;cursor:pointer;background:none;border:none;border-bottom:3px solid transparent;color:#aaa;transition:all .2s;font-family:inherit;margin-bottom:-2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+        .sk-tab-btn.active { color:#b8860b;border-bottom-color:#b8860b;background:#fdf9f0; }
+        .sk-tab-btn:hover:not(.active) { color:#1a1a1a;background:#f5f2ec; }
+        .sk-tab-content { background:#fff;padding:24px 20px;font-size:14px;color:#555;line-height:1.85;animation:fadeUp .22s ease;border-bottom:1px solid #ede9e0; }
+        .sk-ship-row { display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f0ede8; }
+        .sk-ship-row:last-child { border-bottom:none; }
+
         /* More products */
-        .sk-more-wrap { max-width: 1120px; margin: 24px auto 40px; padding: 0 12px; }
-        .sk-more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
-        .sk-more-card { background: #fff; border: 1.5px solid #ede9e0; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; transition: all .22s cubic-bezier(.34,1.56,.64,1); display: block; }
-        .sk-more-card:hover { border-color: #b8860b; transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
-        .sk-more-img { width: 100%; aspect-ratio: 1; background: #f2efe9; position: relative; }
-        .sk-more-body { padding: 11px; }
-        .sk-more-name { font-size: 12.5px; line-height: 1.4; color: #1a1a1a; margin-bottom: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
-        .sk-more-price { font-size: 14px; font-weight: 900; color: #b8860b; font-family: 'Syne', sans-serif; }
+        .sk-more-wrap { max-width:1120px;margin:24px auto 40px;padding:0 12px; }
+        .sk-more-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px; }
+        .sk-more-card { background:#fff;border:1.5px solid #ede9e0;border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;transition:all .22s cubic-bezier(.34,1.56,.64,1);display:block; }
+        .sk-more-card:hover { border-color:#b8860b;transform:translateY(-4px);box-shadow:0 10px 28px rgba(0,0,0,.1); }
+        .sk-more-img { width:100%;aspect-ratio:1;background:#f2efe9;position:relative; }
+        .sk-more-body { padding:11px; }
+        .sk-more-name { font-size:12.5px;line-height:1.4;color:#1a1a1a;margin-bottom:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600; }
+        .sk-more-price { font-size:14px;font-weight:900;color:#b8860b;font-family:'Syne',sans-serif; }
       `}</style>
+
+      {/* ── COLOR GALLERY MODAL ───────────────────────────────────────────── */}
+      {colorGalleryOpen && (
+        <div className="cg-overlay" onClick={(e) => { if (e.target === e.currentTarget) setColorGalleryOpen(false) }}>
+          <div className="cg-modal">
+            {/* Header */}
+            <div className="cg-header">
+              <div className="cg-title">
+                <span style={{ width:18, height:18, borderRadius:5, background:swatchHex(colorGalleryColor), border:'1.5px solid rgba(255,255,255,.2)', flexShrink:0, display:'inline-block' }} />
+                {colorGalleryColor} — All Images
+                <span style={{ fontSize:11, color:'rgba(255,255,255,.4)', fontWeight:500 }}>({colorGalleryImages.length} photo{colorGalleryImages.length!==1?'s':''})</span>
+              </div>
+              <button className="cg-close" onClick={() => setColorGalleryOpen(false)}>
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            {/* Main image */}
+            <div className="cg-main-img" style={{ flex:1 }}>
+              {colorGalleryImages[colorGalleryIndex] ? (
+                <Image
+                  key={colorGalleryImages[colorGalleryIndex]}
+                  src={colorGalleryImages[colorGalleryIndex]}
+                  alt={`${colorGalleryColor} ${colorGalleryIndex + 1}`}
+                  fill style={{ objectFit:'contain' }}
+                />
+              ) : (
+                <div style={{ width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:48,opacity:.3 }}>🖼</div>
+              )}
+              {colorGalleryImages.length > 1 && (
+                <>
+                  <button className="cg-nav-btn left" onClick={() => setColorGalleryIndex(i => Math.max(0, i-1))} disabled={colorGalleryIndex===0}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
+                  </button>
+                  <button className="cg-nav-btn right" onClick={() => setColorGalleryIndex(i => Math.min(colorGalleryImages.length-1, i+1))} disabled={colorGalleryIndex===colorGalleryImages.length-1}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
+                  </button>
+                  <div className="cg-counter">{colorGalleryIndex+1} / {colorGalleryImages.length}</div>
+                </>
+              )}
+            </div>
+            {/* Thumbnails */}
+            {colorGalleryImages.length > 1 && (
+              <div className="cg-thumbs">
+                {colorGalleryImages.map((img, i) => (
+                  <div key={i} className={`cg-thumb${colorGalleryIndex===i?' active':''}`} onClick={() => setColorGalleryIndex(i)}>
+                    <div style={{ position:'relative',width:'100%',height:'100%' }}>
+                      <Image src={img} alt={`${colorGalleryColor} ${i+1}`} fill style={{ objectFit:'cover' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Select this color */}
+            <button className="cg-select-btn" onClick={() => { handleColorSelect(colorGalleryColor); setColorGalleryOpen(false) }}>
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+              Select {colorGalleryColor}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* NAV */}
       <header className="sk-nav">
@@ -548,11 +746,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
         <Link href="/products">Products</Link>
         {product.categories && (<><span>›</span><Link href={`/products?category=${product.category_id}`}>{product.categories.name}</Link></>)}
         <span>›</span>
-        <span style={{ color: '#1a1a1a', fontWeight: 700 }}>{product.name}</span>
+        <span style={{ color:'#1a1a1a',fontWeight:700 }}>{product.name}</span>
       </nav>
 
       {/* MAIN */}
-      <div style={{ padding: '0 12px' }}>
+      <div style={{ padding:'0 12px' }}>
         <div className="sk-main page-enter">
 
           {/* ── GALLERY ── */}
@@ -565,33 +763,32 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                       key={`${selectedColor}-${selectedImage}`}
                       src={mainDisplayImage}
                       alt={`${product.name}${selectedColor ? ` — ${selectedColor}` : ''}`}
-                      fill style={{ objectFit: 'cover' }} className="slide-anim" priority
+                      fill style={{ objectFit:'cover' }} className="slide-anim" priority
                     />
                   : <div style={{ width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:64 }}>📦</div>
                 }
                 {discount > 0 && <div className="sk-disc-ribbon">−{discount}% OFF</div>}
                 {product.is_featured && <div className="sk-feat-pill">★ Featured</div>}
-                {/* Color-driven image indicator badge */}
                 {colorDrivenImage && selectedColor && (
                   <div className="color-img-badge">
-                    <span style={{ width:10, height:10, borderRadius:'50%', background: selectedColorHex, border:'1px solid rgba(255,255,255,.4)', display:'inline-block' }} />
+                    <span style={{ width:10,height:10,borderRadius:'50%',background:selectedColorHex,border:'1px solid rgba(255,255,255,.4)',display:'inline-block' }} />
                     {selectedColor}
                   </div>
                 )}
                 {allImages.length > 1 && (
                   <>
-                    <button className="gal-arrow left" onClick={() => goToImage(selectedImage - 1)} disabled={selectedImage === 0}>
+                    <button className="gal-arrow left" onClick={() => goToImage(selectedImage - 1)} disabled={selectedImage===0}>
                       <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
                     </button>
-                    <button className="gal-arrow right" onClick={() => goToImage(selectedImage + 1)} disabled={selectedImage === allImages.length - 1}>
+                    <button className="gal-arrow right" onClick={() => goToImage(selectedImage + 1)} disabled={selectedImage===allImages.length-1}>
                       <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
                     </button>
                     <div className="gal-dots">
                       {allImages.map((_, i) => (
-                        <button key={i} className={`gal-dot${selectedImage === i ? ' active' : ''}`} onClick={() => goToImage(i)} />
+                        <button key={i} className={`gal-dot${selectedImage===i?' active':''}`} onClick={() => goToImage(i)} />
                       ))}
                     </div>
-                    <div className="swipe-hint" style={{ bottom: 36 }}>
+                    <div className="swipe-hint" style={{ bottom:36 }}>
                       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18"/></svg>
                       Swipe
                       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
@@ -600,15 +797,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 )}
               </div>
             </div>
-            {/* Thumbnails */}
             {allImages.length > 1 && (
               <div className="sk-thumbs">
                 {allImages.map((img, i) => (
                   <div key={i}
-                    className={`sk-thumb${selectedImage === i && !colorDrivenImage ? ' active' : ''}`}
+                    className={`sk-thumb${selectedImage===i && !colorDrivenImage?' active':''}`}
                     onClick={() => { setSelectedImage(i); setSelectedColor('') }}>
-                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                      <Image src={img} alt={`View ${i + 1}`} fill style={{ objectFit: 'cover' }} />
+                    <div style={{ position:'relative',width:'100%',height:'100%' }}>
+                      <Image src={img} alt={`View ${i+1}`} fill style={{ objectFit:'cover' }} />
                     </div>
                   </div>
                 ))}
@@ -623,22 +819,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             {product.short_description && <p className="sk-short-desc">{product.short_description}</p>}
             <div className="sk-rating">
               <span className="sk-stars">★★★★☆</span>
-              <span style={{ fontSize:13, color:'#555', fontWeight:600 }}>4.4</span>
-              <span style={{ fontSize:13, color:'#b8860b', cursor:'pointer', fontWeight:600 }}>(99 ratings)</span>
+              <span style={{ fontSize:13,color:'#555',fontWeight:600 }}>4.4</span>
+              <span style={{ fontSize:13,color:'#b8860b',cursor:'pointer',fontWeight:600 }}>(99 ratings)</span>
             </div>
 
-            {/* ★ PRICE — size-driven */}
+            {/* PRICE */}
             <div className="sk-price-box">
               <div className="sk-price-label">
                 M.R.P.
-                {selectedSize && (
-                  <span className="sk-price-size-note">for {selectedSize}" size</span>
-                )}
+                {selectedSize && <span className="sk-price-size-note">for {selectedSize}" size</span>}
               </div>
-              <div
-                className={`sk-price-main${priceFlash ? ' price-flash' : ''}`}
-                key={`${displayPrice}-${selectedSize}`}
-              >
+              <div className={`sk-price-main${priceFlash?' price-flash':''}`} key={`${displayPrice}-${selectedSize}`}>
                 <sup>₹</sup>{Math.floor(displayPrice).toLocaleString('en-IN')}
                 <sup style={{ fontSize:15 }}>.{String(Math.round((displayPrice % 1) * 100)).padStart(2,'0')}</sup>
               </div>
@@ -652,140 +843,219 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 </div>
               )}
               {!selectedSize && sizesAvailable.length > 0 && (
-                <p style={{ fontSize:11, color:'#aaa', marginTop:8 }}>↑ Select a size to see exact pricing</p>
+                <p style={{ fontSize:11,color:'#aaa',marginTop:8 }}>↑ Select a size to see exact pricing</p>
               )}
             </div>
 
-            {/* ★ SIZES — price shown per button, price changes on select */}
+            {/* ══ SIZE DROPDOWN ══ */}
             {sizesAvailable.length > 0 && (
-              <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom:4 }}>
                 <div className="sk-section-title">
-                  Size:{selectedSize && <span className="selected-val">{selectedSize} inches</span>}
+                  Size: {selectedSize && <span className="selected-val">{selectedSize} inches</span>}
                   <span className="sk-section-note">· price varies by size</span>
                 </div>
-                <div className="sk-size-scroll">
-                  {sizesAvailable.map(size => {
-                    const available  = variants.some(v => v.is_active && v.options.size_inches === size && v.inventory_quantity > 0)
-                    const price      = priceForSize(variants, size)
-                    const isSelected = selectedSize === size
-                    return (
-                      <button key={size}
-                        className={`sk-size-box${isSelected ? ' selected' : ''}`}
-                        disabled={!available}
-                        onClick={() => handleSizeSelect(size)}
-                      >
-                        {isSelected && <span className="size-check">✓</span>}
-                        <span className="size-label">{size}"</span>
-                        {price !== null && (
-                          <span className="size-price">₹{price.toLocaleString('en-IN')}</span>
-                        )}
-                        {!available && <span className="size-oos">Out of stock</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ★ COLORS — dropdown with image preview per option, color changes gallery image only */}
-            {colorsAvailable.length > 0 && (
-              <div style={{ marginBottom: 4 }}>
-                <div className="sk-section-title">
-                  Color:{selectedColor && <span className="selected-val">{selectedColor}</span>}
-                  <span className="sk-section-note">· changes photo only</span>
-                </div>
-
-                {/* Dropdown trigger */}
-                <div className="sk-color-dropdown-wrap" ref={colorDropRef}>
+                <div className="sk-dropdown-wrap" ref={sizeDropRef}>
                   <button
-                    className={`sk-color-trigger${colorDropOpen ? ' open' : ''}`}
-                    onClick={() => setColorDropOpen(o => !o)}
                     type="button"
+                    className={`sk-dropdown-trigger${sizeDropOpen?' open':''}`}
+                    onClick={() => { setSizeDropOpen(o => !o); setColorDropOpen(false) }}
                   >
-                    {/* Show selected color's variant image or swatch */}
-                    {colorVariant?.image_url
-                      ? <img src={colorVariant.image_url} alt={selectedColor}
-                          style={{ width:28, height:28, borderRadius:8, objectFit:'cover', border:'1.5px solid #e5e0d8', flexShrink:0 }} />
-                      : <span className="color-swatch" style={{ background: selectedColorHex }} />
-                    }
-                    <span className="color-name">{selectedColor || 'Select color'}</span>
-                    {colorsCount > 1 && <span className="color-count">{colorsCount} colors</span>}
+                    <span className="trigger-icon">📐</span>
+                    <span className="trigger-label">
+                      <span className="trigger-main">
+                        {selectedSize ? `${selectedSize}" inches` : 'Select a size'}
+                      </span>
+                      <span className="trigger-sub">
+                        {selectedSize
+                          ? `₹${(priceForSize(variants, selectedSize) ?? 0).toLocaleString('en-IN')} · click to change`
+                          : `${sizesAvailable.length} sizes available`}
+                      </span>
+                    </span>
+                    {selectedSize && (
+                      <span className="trigger-badge">
+                        ₹{(priceForSize(variants, selectedSize) ?? 0).toLocaleString('en-IN')}
+                      </span>
+                    )}
                     <svg className="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>
                     </svg>
                   </button>
 
-                  {/* ★ Dropdown panel — each option shows variant image */}
+                  {sizeDropOpen && (
+                    <div className="sk-size-panel">
+                      <div className="sk-size-panel-head">
+                        <p>Choose a size · price updates on selection</p>
+                      </div>
+                      <div className="sk-size-grid">
+                        {sizesAvailable.map(size => {
+                          const available = variants.some(v => v.is_active && v.options.size_inches === size)
+                          const price     = priceForSize(variants, size)
+                          const isSelected = selectedSize === size
+                          return (
+                            <button key={size}
+                              type="button"
+                              className={`sk-size-option${isSelected?' selected':''}`}
+                              disabled={!available}
+                              onClick={() => handleSizeSelect(size)}
+                            >
+                              {isSelected && <span className="so-check">✓</span>}
+                              <span className="so-size">{size}"</span>
+                              {price !== null && <span className="so-price">₹{price.toLocaleString('en-IN')}</span>}
+
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ══ COLOR DROPDOWN — with image strips & view all ══ */}
+            {colorsAvailable.length > 0 && (
+              <div style={{ marginBottom:4 }}>
+                <div className="sk-section-title">
+                  Color: {selectedColor && <span className="selected-val">{selectedColor}</span>}
+                  <span className="sk-section-note">· tap 🖼 to see all images</span>
+                </div>
+                <div className="sk-dropdown-wrap" ref={colorDropRef}>
+                  {/* Trigger */}
+                  <button
+                    type="button"
+                    className={`sk-dropdown-trigger${colorDropOpen?' open':''}`}
+                    onClick={() => { setColorDropOpen(o => !o); setSizeDropOpen(false) }}
+                  >
+                    {/* Show selected color image or swatch */}
+                    {colorVariant?.image_url
+                      ? <Image src={colorVariant.image_url} alt={selectedColor}
+                          width={32} height={32}
+                          style={{ borderRadius:9, objectFit:'cover', border:'1.5px solid #e5e0d8', flexShrink:0 }} />
+                      : <span style={{ width:32, height:32, borderRadius:9, background:selectedColorHex, border:'1.5px solid rgba(0,0,0,.1)', flexShrink:0, display:'inline-block' }} />
+                    }
+                    <span className="trigger-label">
+                      <span className="trigger-main">{selectedColor || 'Select a color'}</span>
+                      <span className="trigger-sub">
+                        {selectedColor
+                          ? 'click to change · images update on select'
+                          : `${colorsAvailable.length} colors available`}
+                      </span>
+                    </span>
+                    <svg className="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
+
+                  {/* Color dropdown panel */}
                   {colorDropOpen && (
                     <div className="sk-color-panel">
+                      <div className="sk-color-panel-head">
+                        <p>Choose a color · click 🖼 images to view gallery</p>
+                      </div>
                       {colorsAvailable.map(color => {
-                        const hex       = swatchHex(color)
-                        const available = variants.some(v =>
+                        // available = color exists as active variant (ignore stock if track_inventory is off)
+                        const matchingVariants = variants.filter(v =>
                           v.is_active &&
                           v.options.color?.toLowerCase() === color.toLowerCase() &&
-                          (!selectedSize || v.options.size_inches === selectedSize) &&
-                          v.inventory_quantity > 0
+                          (!selectedSize || v.options.size_inches === selectedSize)
                         )
+                        const available = matchingVariants.length > 0
                         const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
-                        // Get color-specific image for this option
-                        const cv = variants.find(vv =>
-                          vv.is_active &&
-                          vv.options.color?.toLowerCase() === color.toLowerCase() &&
-                          (!selectedSize || vv.options.size_inches === selectedSize)
-                        )
+                        const hex = swatchHex(color)
+
+                        // Get ALL images for this color (across all sizes)
+                        const colorImgs = variants
+                          .filter(v => v.is_active && v.options.color?.toLowerCase() === color.toLowerCase() && v.image_url)
+                          .map(v => v.image_url as string)
+                        const uniqueColorImgs = Array.from(new Set(colorImgs))
+
                         return (
-                          <button key={color}
-                            className={`sk-color-option${isSelected ? ' selected' : ''}`}
-                            disabled={!available}
-                            onClick={() => handleColorSelect(color)}
+                          // Outer div — handles the "select color" click
+                          <div
+                            key={color}
+                            role="button"
+                            tabIndex={available ? 0 : -1}
+                            className={`sk-color-option-row${isSelected?' selected':''}${!available?' disabled':''}`}
+                            style={{ cursor: available ? 'pointer' : 'not-allowed' }}
+                            onClick={() => { if (available) handleColorSelect(color) }}
+                            onKeyDown={e => { if (available && (e.key==='Enter'||e.key===' ')) handleColorSelect(color) }}
                           >
-                            {/* ★ Variant image in dropdown */}
-                            {cv?.image_url
-                              ? <img src={cv.image_url} alt={color} className="sk-color-opt-img" />
-                              : <div className="sk-color-opt-img-placeholder">🖼</div>
-                            }
-                            {/* Color swatch dot */}
-                            <span className="sk-color-opt-swatch" style={{ background: hex, opacity: available ? 1 : .4 }} />
-                            <div className="sk-color-opt-info">
-                              <span className="sk-color-opt-name">
-                                {color}{!available ? ' — Out of stock' : ''}
-                              </span>
-                              {cv?.image_url && (
-                                <span className="sk-color-opt-tag">Tap to preview</span>
+                            {/* Image strip — stopPropagation so clicking images opens gallery, not selects color */}
+                            <div
+                              className="co-img-strip"
+                              role="button"
+                              tabIndex={uniqueColorImgs.length > 0 ? 0 : -1}
+                              style={{ cursor: uniqueColorImgs.length > 0 ? 'zoom-in' : 'default' }}
+                              title={uniqueColorImgs.length > 0 ? `View all ${color} images` : undefined}
+                              onClick={e => { e.stopPropagation(); if (uniqueColorImgs.length > 0) openColorGallery(color) }}
+                              onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.stopPropagation(); openColorGallery(color) } }}
+                            >
+                              {uniqueColorImgs.length > 0 ? (
+                                <>
+                                  {uniqueColorImgs.slice(0, 2).map((img, i) => (
+                                    <div key={i} className={`co-img-item${i===0?' main-img':''}`}>
+                                      <Image src={img} alt={`${color} ${i+1}`} fill style={{ objectFit:'cover' }} />
+                                    </div>
+                                  ))}
+                                </>
+                              ) : (
+                                <div className="co-img-placeholder">🖼</div>
                               )}
                             </div>
-                            {isSelected && <span className="opt-check">✓</span>}
-                          </button>
+
+                            {/* Color swatch */}
+                            <span className="co-swatch" style={{ background:hex, opacity:available?1:.4 }} />
+
+                            {/* Color info */}
+                            <div className="co-info">
+                              <span className="co-name">{color}</span>
+                              <span className="co-meta">
+                                {uniqueColorImgs.length} image{uniqueColorImgs.length!==1?'s':''}
+                                {uniqueColorImgs.length > 0 && ' · click photos to preview'}
+                              </span>
+                            </div>
+
+                            {/* "View all" — styled div, NOT a button (avoids nested interactive element) */}
+                            {uniqueColorImgs.length > 0 && (
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                className="co-view-all-btn"
+                                title={`View all ${color} images`}
+                                onClick={e => { e.stopPropagation(); openColorGallery(color) }}
+                                onKeyDown={e => { if (e.key==='Enter'||e.key===' ') { e.stopPropagation(); openColorGallery(color) } }}
+                              >
+                                🖼 {uniqueColorImgs.length > 1 ? `All ${uniqueColorImgs.length}` : 'View'}
+                              </div>
+                            )}
+
+                            {isSelected && <span className="co-check">✓</span>}
+                          </div>
                         )
                       })}
                     </div>
                   )}
                 </div>
 
-                <p className="sk-color-note" style={{ marginTop: 8 }}>
-                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                  Choosing a color updates the product photo · price is set by size
-                </p>
-
-                {/* Quick mini swatch row */}
-                <div className="sk-swatch-row">
+                {/* Quick mini swatch row (always visible) */}
+                <div className="sk-swatch-row" style={{ marginTop:10 }}>
                   {colorsAvailable.map(color => {
-                    const hex        = swatchHex(color)
-                    const available  = variants.some(v =>
+                    const hex = swatchHex(color)
+                    const swatchVariants = variants.filter(v =>
                       v.is_active &&
                       v.options.color?.toLowerCase() === color.toLowerCase() &&
-                      (!selectedSize || v.options.size_inches === selectedSize) &&
-                      v.inventory_quantity > 0
+                      (!selectedSize || v.options.size_inches === selectedSize)
                     )
+                    const available = swatchVariants.length > 0
                     const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
                     return (
                       <button key={color}
-                        className={`sk-mini-swatch${isSelected ? ' selected' : ''}`}
+                        type="button"
+                        className={`sk-mini-swatch${isSelected?' selected':''}`}
                         disabled={!available}
                         title={color}
                         onClick={() => handleColorSelect(color)}
-                        style={{ background: hex }}
-                        type="button"
+                        style={{ background:hex }}
                       >
                         {isSelected && <span className="mini-check">✓</span>}
                       </button>
@@ -804,7 +1074,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 {[selectedSize ? `${selectedSize}" inches` : '', selectedColor].filter(Boolean).join(' · ')}
                 {selectedSize && (
                   <span className="sk-summary-price">
-                    ₹{displayPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    ₹{displayPrice.toLocaleString('en-IN', { maximumFractionDigits:0 })}
                   </span>
                 )}
               </div>
@@ -813,21 +1083,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             {/* Stock */}
             <div className={`sk-stock ${stockLabel.cls}`}>
               <div className="sk-stock-dot" style={{
-                background: stockLabel.cls === 'oos' ? '#dc2626' : stockLabel.cls === 'low-stock' ? '#ea580c' : '#15803d',
-                boxShadow: `0 0 0 3px ${stockLabel.cls === 'oos' ? 'rgba(220,38,38,.2)' : stockLabel.cls === 'low-stock' ? 'rgba(234,88,12,.2)' : 'rgba(21,128,61,.2)'}`,
+                background: stockLabel.cls==='oos' ? '#dc2626' : stockLabel.cls==='low-stock' ? '#ea580c' : '#15803d',
+                boxShadow: `0 0 0 3px ${stockLabel.cls==='oos' ? 'rgba(220,38,38,.2)' : stockLabel.cls==='low-stock' ? 'rgba(234,88,12,.2)' : 'rgba(21,128,61,.2)'}`,
               }} />
               {stockLabel.text}
             </div>
 
             {/* Qty + CTA */}
-            {stockLabel.cls !== 'oos' && (
+            {true && (
               <>
                 <div className="sk-qty-row">
                   <span className="sk-qty-label">Qty:</span>
                   <div className="sk-qty-box">
-                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.max(1, p - 1))} disabled={quantity <= 1}>−</button>
+                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.max(1, p-1))} disabled={quantity<=1}>−</button>
                     <div className="sk-qty-num">{quantity}</div>
-                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(Math.max(stock, 1), p + 1))} disabled={quantity >= Math.max(stock, 1)}>+</button>
+                    <button className="sk-qty-btn" onClick={() => setQuantity(p => Math.min(Math.max(stock,1), p+1))} disabled={quantity>=Math.max(stock,1)}>+</button>
                   </div>
                   <span className="sk-qty-total">
                     Total: <strong>₹{(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits:0 })}</strong>
@@ -836,7 +1106,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 <div className="sk-cta-stack">
                   <button
                     onClick={handleAddToCart}
-                    className={`sk-btn-cart${addedToCart ? ' success' : ''}`}
+                    className={`sk-btn-cart${addedToCart?' success':''}`}
                     disabled={!selectedSize || !selectedColor}
                   >
                     {addedToCart ? (
@@ -851,7 +1121,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                         </svg>
-                        {!selectedSize ? 'Select a Size First' : !selectedColor ? 'Select a Color' : `Add to Cart · ₹${(displayPrice * quantity).toLocaleString('en-IN', { maximumFractionDigits:0 })}`}
+                        {!selectedSize ? 'Select a Size First' : !selectedColor ? 'Select a Color' : `Add to Cart · ₹${(displayPrice*quantity).toLocaleString('en-IN',{maximumFractionDigits:0})}`}
                       </>
                     )}
                   </button>
@@ -862,8 +1132,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     </svg>
                     Buy Now
                   </button>
-                  <button className={`sk-btn-wish${isWishlisted ? ' active' : ''}`} onClick={() => setIsWishlisted(p => !p)}>
-                    <svg width="16" height="16" fill={isWishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <button className={`sk-btn-wish${isWishlisted?' active':''}`} onClick={() => setIsWishlisted(p => !p)}>
+                    <svg width="16" height="16" fill={isWishlisted?'currentColor':'none'} stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                     </svg>
                     {isWishlisted ? '♥ Saved to Wishlist' : 'Add to Wishlist'}
@@ -871,7 +1141,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 </div>
               </>
             )}
-            {stockLabel.cls === 'oos' && <div className="sk-oos">⚠️ Currently Out of Stock</div>}
+
 
             {/* Trust badges */}
             <div className="sk-badges">
@@ -883,9 +1153,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             {/* Seller info */}
             <div className="sk-seller">
               {[
-                {k:'Sold by',       v:'Shazfa Kraft',          cls:''},
-                {k:'Dispatches from',v:'Shazfa Kraft',         cls:''},
-                {k:'Est. delivery', v:'3–7 business days',     cls:'green'},
+                {k:'Sold by',        v:'Shazfa Kraft',      cls:''},
+                {k:'Dispatches from',v:'Shazfa Kraft',      cls:''},
+                {k:'Est. delivery',  v:'3–7 business days', cls:'green'},
               ].map(r => (
                 <div key={r.k} className="sk-seller-row">
                   <span className="sk-seller-key">{r.k}</span>
@@ -906,7 +1176,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
       <div className="tab-section" style={{ padding:'0 12px' }}>
         <div className="sk-tab-bar" style={{ borderRadius:'14px 14px 0 0', marginTop:16, overflow:'hidden' }}>
           {(['description','shipping','reviews'] as const).map(tab => (
-            <button key={tab} className={`sk-tab-btn${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
+            <button key={tab} className={`sk-tab-btn${activeTab===tab?' active':''}`} onClick={() => setActiveTab(tab)}>
               {tab==='description'?'📄 Description':tab==='shipping'?'🚚 Shipping':'⭐ Reviews'}
             </button>
           ))}
@@ -920,10 +1190,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
           {activeTab === 'shipping' && (
             <div>
               {[
-                {i:'🚚',t:'Free Shipping',       b:'Available on all orders above ₹499. Delivered within 3–7 business days.'},
-                {i:'⚡',t:'Express Delivery',    b:'Next-day delivery in select cities for an additional charge.'},
-                {i:'↩️',t:'Return Policy',       b:'Returns accepted within 7 days of delivery. Item must be unused and in original packaging.'},
-                {i:'💳',t:'Prepaid Discount',    b:'Get an extra 5% off when you pay online at checkout.'},
+                {i:'🚚',t:'Free Shipping',    b:'Available on all orders above ₹499. Delivered within 3–7 business days.'},
+                {i:'⚡',t:'Express Delivery', b:'Next-day delivery in select cities for an additional charge.'},
+                {i:'↩️',t:'Return Policy',    b:'Returns accepted within 7 days of delivery. Item must be unused and in original packaging.'},
+                {i:'💳',t:'Prepaid Discount', b:'Get an extra 5% off when you pay online at checkout.'},
               ].map(s => (
                 <div key={s.t} className="sk-ship-row">
                   <div style={{ fontSize:22, flexShrink:0, width:30, textAlign:'center' }}>{s.i}</div>
