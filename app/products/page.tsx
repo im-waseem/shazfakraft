@@ -96,9 +96,11 @@ export default function ProductsPage() {
     setProducts(prods)
     setCategories(cats || [])
     if (prods.length > 0) {
-      const max = Math.ceil(Math.max(...prods.map((p: any) => Number(p.price) || 0)))
-      setPriceMax(max || 10000)
-      setMaxPrice(max || 10000)
+      // Use display price (variant-aware) so filters always match visible product prices
+      const computedMax = Math.ceil(Math.max(...prods.map((p: any) => getDisplayPrice(p) || 0)))
+      const safeMax = computedMax > 0 ? computedMax : 10000
+      setPriceMax(safeMax)
+      setMaxPrice(safeMax)
     }
     setLoading(false)
   }, [])
@@ -188,20 +190,9 @@ export default function ProductsPage() {
           onChange={e => { const v = Number(e.target.value); if (v <= maxPrice) setMinPrice(v) }} />
         <input type="range" className="price-range" min={0} max={priceMax} value={maxPrice}
           onChange={e => { const v = Number(e.target.value); if (v >= minPrice) setMaxPrice(v) }} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-          {[['Under ₹500', 0, 500], ['₹500–₹2,000', 500, 2000], ['₹2,000–₹5,000', 2000, 5000], ['Over ₹5,000', 5000, priceMax]].map(([label, mn, mx]) => (
-            <button key={String(label)} onClick={() => { setMinPrice(Number(mn)); setMaxPrice(Number(mx)) }}
-              style={{
-                textAlign: 'left', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                border: '1px solid transparent', cursor: 'pointer',
-                background:  minPrice === mn && maxPrice === mx ? 'rgba(184,134,11,0.10)' : 'transparent',
-                color:       minPrice === mn && maxPrice === mx ? '#b8860b' : 'rgba(26,20,16,0.55)',
-                borderColor: minPrice === mn && maxPrice === mx ? 'rgba(184,134,11,0.2)' : 'transparent',
-              }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <p style={{ marginTop: 8, fontSize: 11, color: 'rgba(26,20,16,0.5)' }}>
+          Use the sliders to set your custom price range.
+        </p>
       </div>
     </div>
   )
@@ -257,7 +248,7 @@ export default function ProductsPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => { setCategory(''); setSearch('') }} style={{ fontSize: 12, color: '#1a1410', background: '#fff', border: '1px solid #d4c8b8', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => { setCategory(''); setSearch(''); setMinPrice(0); setMaxPrice(priceMax || 10000); setSortBy('newest') }} style={{ fontSize: 12, color: '#1a1410', background: '#fff', border: '1px solid #d4c8b8', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>
                 All Products
               </button>
               {hasFilter && (
@@ -322,9 +313,10 @@ export default function ProductsPage() {
                 const showLowStock = p.track_inventory !== false && totalStock > 0 && totalStock <= 10
 
                 return (
-                  <Link key={p.id} href={`/products/${p.slug}`} className="prod-card"
+                  <div key={p.id} className="prod-card"
                     style={{ opacity: isOOS && p.track_inventory !== false ? 0.75 : 1 }}>
                     {/* Image */}
+                    <Link href={`/products/${p.slug}`} style={{ display: 'block' }}>
                     <div style={{ aspectRatio: '1', background: '#f3ece1', position: 'relative', overflow: 'hidden' }}>
                       {p.main_image_url
                         ? <img src={p.main_image_url} alt={p.name} className="pimg" />
@@ -356,6 +348,7 @@ export default function ProductsPage() {
                         </div>
                       )}
                     </div>
+                    </Link>
 
                     {/* Info */}
                     <div style={{ padding: '14px 14px 16px' }}>
@@ -364,9 +357,11 @@ export default function ProductsPage() {
                           {p.categories.name}
                         </span>
                       )}
-                      <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1410', lineHeight: 1.4, marginBottom: 8, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {p.name}
-                      </p>
+                      <Link href={`/products/${p.slug}`} style={{ textDecoration: 'none' }}>
+                        <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1410', lineHeight: 1.4, marginBottom: 8, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {p.name}
+                        </p>
+                      </Link>
 
                       {/* Color swatches */}
                       {colors.length > 0 && (
@@ -418,7 +413,7 @@ export default function ProductsPage() {
                         </p>
                       )}
                     </div>
-                  </Link>
+                  </div>
                 )
               })}
             </div>

@@ -808,7 +808,7 @@ export default function Home() {
             <div>
               <p className="footer-head">Contact</p>
               <p style={{ color: '#8a6a4a', fontSize: 13, marginBottom: 6 }}>support@shazfakraft.in</p>
-              <a href="https://wa.me/919123456789" target="_blank" rel="noopener noreferrer"
+              <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer"
                 style={{ color: '#25D366', fontSize: 13, textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                 ☎ WhatsApp Us
               </a>
@@ -824,7 +824,7 @@ export default function Home() {
 
       {/* ══ FLOATING BUTTONS ══════════════════════════════════════════════════ */}
       <button className="scroll-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
-      <a href="https://wa.me/919123456789" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
+      <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
         💬
       </a>
 
