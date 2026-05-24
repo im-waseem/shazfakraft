@@ -1,63 +1,55 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+type PayMethod = 'card' | 'upi' | 'cod'
 
 interface CartItem {
   id: string
   productId: string
+  variantId?: string | null
   name: string
+  variantLabel?: string
+  size?: string
+  color?: string
+  sku?: string
   price: number
   quantity: number
   image: string
 }
 
-interface Order {
-  id: string
-  order_number: string
-  total_amount: number
-  status: string
-}
+interface Order { id: string; order_number: string; total_amount: number; status: string }
 
-const steps = ['Cart', 'Shipping', 'Payment', 'Confirm']
+const STEPS = ['Cart', 'Shipping', 'Payment', 'Review']
 
 export default function CheckoutClient({ orders }: { orders: Order[] }) {
+  const router = useRouter()
+  const [step, setStep] = useState(0)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [step, setStep] = useState(1)
   const [processing, setProcessing] = useState(false)
-  const [payMethod, setPayMethod] = useState<'card' | 'upi' | 'cod'>('card')
+  const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     address: '', city: '', state: '', pin: '',
     cardNumber: '', cardExpiry: '', cardCvv: '', upiId: '',
   })
-  const router = useRouter()
+
+  const setField = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     const init = async () => {
       const saved = localStorage.getItem('cart')
-      if (saved) {
-        const items = JSON.parse(saved)
-        if (!items.length) router.push('/cart')
-        setCartItems(items)
-      } else {
-        router.push('/cart')
-      }
+      const items = saved ? JSON.parse(saved) : []
+      if (!items?.length) return router.push('/cart')
+      setCartItems(items)
 
-      // Autofill from saved profile (if logged in)
       const supabase = createClient()
-      const { data: authData } = await supabase.auth.getUser()
-      const user = authData.user
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle()
-
+      const { data: customer } = await supabase.from('customers').select('*').eq('id', user.id).maybeSingle()
       if (!customer) return
 
       setForm(prev => ({
@@ -71,17 +63,14 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
         pin: customer.pincode || customer.shipping_address?.pincode || prev.pin,
       }))
     }
-
     init()
   }, [router])
 
-  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
-
-  const subtotal = cartItems.reduce((s, i) => s + i.price * i.quantity, 0)
-  const shipping = subtotal > 499 ? 0 : 49
+  const subtotal = useMemo(() => cartItems.reduce((s, i) => s + i.price * i.quantity, 0), [cartItems])
+  const shipping = subtotal > 999 ? 0 : 49
   const total = subtotal + shipping
 
-  const handleOrder = async () => {
+  const placeOrder = async () => {
     setProcessing(true)
     try {
       const res = await fetch('/api/orders', {
@@ -90,36 +79,23 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
         body: JSON.stringify({
           items: cartItems,
           shipping: {
-            firstName: form.firstName,
-            lastName: form.lastName,
-            email: form.email,
-            phone: form.phone,
-            address: form.address,
-            city: form.city,
-            state: form.state,
-            pincode: form.pin,
+            firstName: form.firstName, lastName: form.lastName, email: form.email, phone: form.phone,
+            address: form.address, city: form.city, state: form.state, pincode: form.pin,
           },
-          billing: {
-            address: form.address,
-            city: form.city,
-            state: form.state,
-            pincode: form.pin,
-          },
+          billing: { address: form.address, city: form.city, state: form.state, pincode: form.pin },
           notes: `Payment method: ${payMethod}`,
         }),
       })
-
-      const result = await res.json()
-      if (!res.ok || !result?.order?.order_number) {
-        alert(result?.error || 'Failed to place order. Please try again.')
+      const json = await res.json()
+      if (!res.ok || !json?.order?.order_number) {
+        alert(json?.error || 'Failed to place order')
         setProcessing(false)
         return
       }
-
       localStorage.removeItem('cart')
-      router.push(`/order-success?orderNumber=${encodeURIComponent(result.order.order_number)}`)
-    } catch (e) {
-      alert('Unable to place order right now. Please try again.')
+      router.push(`/order-success?orderNumber=${encodeURIComponent(json.order.order_number)}`)
+    } catch {
+      alert('Unable to place order right now')
       setProcessing(false)
     }
   }
@@ -127,239 +103,91 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
   if (!cartItems.length) return null
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fffbf5', fontFamily: "'Nunito', sans-serif", color: '#1c1410' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Nunito:wght@300;400;500;600;700&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        :root{
-          --gold:#c8860a;--gold-pale:#fef3d8;--warm:#fdf3e3;
-          --text:#1c1410;--text-2:#5a4a3a;--text-3:#9a8a7a;
-          --border:#ecdcc8;--border-2:#dccaaa;
-        }
-        .f-input{width:100%;padding:12px 14px;border:1.5px solid var(--border-2);border-radius:10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:#fff;transition:border .2s}
-        .f-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,134,10,.1)}
-        .f-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);display:block;margin-bottom:6px}
-        .pay-opt{border:2px solid var(--border-2);border-radius:14px;padding:14px 18px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px;background:#fff}
-        .pay-opt.active{border-color:var(--gold);background:var(--gold-pale)}
-        .pay-opt:hover{border-color:var(--gold)}
-        .next-btn{width:100%;background:var(--gold);color:#fff;border:none;border-radius:50px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.04em;transition:background .2s;margin-top:24px}
-        .next-btn:hover{background:#e09a20}
-        .next-btn:disabled{opacity:.5;cursor:not-allowed}
-        .step-num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
-        @media(max-width:820px){.chk-grid{grid-template-columns:1fr!important}.order-sum{position:static!important}}
+    <div style={{ minHeight: '100vh', background: '#faf8f5', fontFamily: "'DM Sans', sans-serif", color: '#1a1410' }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+      .input{width:100%;padding:11px 12px;border:1.5px solid #d4c8b8;border-radius:10px}.btn{background:#b8860b;color:#fff;border:none;border-radius:999px;padding:12px 18px;font-weight:700;cursor:pointer}
+      .ghost{background:#fff;border:1.5px solid #d4c8b8;color:#6b5c4a}.card{background:#fff;border:1px solid #e8e0d4;border-radius:16px}
+      .pay{border:1.5px solid #d4c8b8;border-radius:12px;padding:12px;cursor:pointer}.pay.active{border-color:#b8860b;background:#fef9ed}
+      @media(max-width:860px){.grid{grid-template-columns:1fr!important}.sticky{position:static!important}}
       `}</style>
 
-      {/* Header */}
-      <header style={{ background: '#fff', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link href="/" style={{ textDecoration: 'none', fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 700, color: 'var(--gold)' }}>Shafa</Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-            {steps.map((s, i) => (
-              <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div className="step-num" style={{
-                    background: i <= step ? 'var(--gold)' : 'var(--warm)',
-                    color: i <= step ? '#fff' : 'var(--text-3)',
-                    border: `2px solid ${i <= step ? 'var(--gold)' : 'var(--border-2)'}`,
-                  }}>
-                    {i < step ? '✓' : i + 1}
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: i === step ? 'var(--text)' : 'var(--text-3)' }}>{s}</span>
-                </div>
-                {i < steps.length - 1 && (
-                  <div style={{ width: 32, height: 2, background: i < step ? 'var(--gold)' : 'var(--border-2)', margin: '0 8px' }} />
-                )}
-              </div>
-            ))}
-          </div>
+      <header style={{ background: '#fff', borderBottom: '1px solid #e8e0d4', padding: '0 20px' }}>
+        <div style={{ maxWidth: 1160, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Link href="/" style={{ textDecoration: 'none', fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#b8860b', fontWeight: 900 }}>Shafa</Link>
+          <div style={{ display: 'flex', gap: 10 }}>{STEPS.map((s, i) => <span key={s} style={{ fontSize: 12, fontWeight: i===step?700:500, color: i<=step?'#1a1410':'#a89880' }}>{i+1}. {s}</span>)}</div>
         </div>
       </header>
 
-      <div className="chk-grid" style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(20px,4vw,40px) 20px', display: 'grid', gridTemplateColumns: '1fr 360px', gap: 28, alignItems: 'start' }}>
+      <div className="grid" style={{ maxWidth: 1160, margin: '0 auto', padding: 20, display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
+          {step === 0 && (
+            <>
+              <h2>Cart Review</h2>
+              <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+                {cartItems.map(item => <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee2d2', paddingBottom: 8 }}><span>{item.name} × {item.quantity}</span><strong>₹{(item.price*item.quantity).toFixed(0)}</strong></div>)}
+              </div>
+              <button className="btn" style={{ marginTop: 16 }} onClick={() => setStep(1)}>Continue to Shipping</button>
+            </>
+          )}
 
-        {/* Form */}
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(20px,4vw,32px)' }}>
-
-          {/* Step 1 — Shipping */}
           {step === 1 && (
             <>
-              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Shipping Information</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                {([['firstName', 'First Name', 'text'], ['lastName', 'Last Name', 'text']] as const).map(([k, l, t]) => (
-                  <div key={k}>
-                    <label className="f-label">{l} *</label>
-                    <input className="f-input" type={t} value={form[k]} onChange={e => set(k, e.target.value)} required />
-                  </div>
-                ))}
+              <h2>Shipping Details</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+                <input className="input" placeholder="First name" value={form.firstName} onChange={e => setField('firstName', e.target.value)} />
+                <input className="input" placeholder="Last name" value={form.lastName} onChange={e => setField('lastName', e.target.value)} />
+                <input className="input" placeholder="Email" value={form.email} onChange={e => setField('email', e.target.value)} />
+                <input className="input" placeholder="Phone" value={form.phone} onChange={e => setField('phone', e.target.value)} />
+                <input className="input" placeholder="Address" style={{ gridColumn: '1 / -1' }} value={form.address} onChange={e => setField('address', e.target.value)} />
+                <input className="input" placeholder="City" value={form.city} onChange={e => setField('city', e.target.value)} />
+                <input className="input" placeholder="State" value={form.state} onChange={e => setField('state', e.target.value)} />
+                <input className="input" placeholder="PIN" value={form.pin} onChange={e => setField('pin', e.target.value)} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                {([['email', 'Email Address', 'email'], ['phone', 'Phone Number', 'tel']] as const).map(([k, l, t]) => (
-                  <div key={k}>
-                    <label className="f-label">{l} *</label>
-                    <input className="f-input" type={t} value={form[k]} onChange={e => set(k, e.target.value)} required />
-                  </div>
-                ))}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <button className="btn ghost" onClick={() => setStep(0)}>Back</button>
+                <button className="btn" onClick={() => setStep(2)} disabled={!form.firstName || !form.email || !form.phone || !form.address}>Continue to Payment</button>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label className="f-label">Street Address *</label>
-                <input className="f-input" type="text" value={form.address} onChange={e => set('address', e.target.value)} placeholder="House no., street, area" required />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                {([['city', 'City'], ['state', 'State'], ['pin', 'PIN Code']] as const).map(([k, l]) => (
-                  <div key={k}>
-                    <label className="f-label">{l} *</label>
-                    <input className="f-input" type="text" value={form[k]} onChange={e => set(k, e.target.value)} required />
-                  </div>
-                ))}
-              </div>
-              <button
-                className="next-btn"
-                onClick={() => setStep(2)}
-                disabled={!form.firstName || !form.email || !form.phone || !form.address}
-              >
-                Continue to Payment →
-              </button>
             </>
           )}
 
-          {/* Step 2 — Payment */}
           {step === 2 && (
             <>
-              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Payment Method</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-                {([['card', '💳', 'Credit / Debit Card'], ['upi', '📱', 'UPI Payment'], ['cod', '💵', 'Cash on Delivery']] as const).map(([id, icon, label]) => (
-                  <div key={id} className={`pay-opt ${payMethod === id ? 'active' : ''}`} onClick={() => setPayMethod(id)}>
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === id ? 'var(--gold)' : 'var(--border-2)'}`, background: payMethod === id ? 'var(--gold)' : '#fff', flexShrink: 0 }} />
-                    <span style={{ fontSize: 20 }}>{icon}</span>
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
-                  </div>
-                ))}
+              <h2>Payment Method</h2>
+              <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+                {(['card', 'upi', 'cod'] as PayMethod[]).map(m => <div key={m} className={`pay ${payMethod===m?'active':''}`} onClick={() => setPayMethod(m)}>{m.toUpperCase()}</div>)}
               </div>
-
-              {payMethod === 'card' && (
-                <div style={{ background: 'var(--warm)', borderRadius: 14, padding: 20, border: '1px solid var(--border)' }}>
-                  <div style={{ marginBottom: 14 }}>
-                    <label className="f-label">Card Number</label>
-                    <input className="f-input" type="text" value={form.cardNumber} onChange={e => set('cardNumber', e.target.value)} placeholder="0000 0000 0000 0000" maxLength={19} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    <div>
-                      <label className="f-label">Expiry</label>
-                      <input className="f-input" type="text" value={form.cardExpiry} onChange={e => set('cardExpiry', e.target.value)} placeholder="MM / YY" />
-                    </div>
-                    <div>
-                      <label className="f-label">CVV</label>
-                      <input className="f-input" type="text" value={form.cardCvv} onChange={e => set('cardCvv', e.target.value)} placeholder="•••" maxLength={4} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {payMethod === 'upi' && (
-                <div style={{ background: 'var(--warm)', borderRadius: 14, padding: 20, border: '1px solid var(--border)' }}>
-                  <label className="f-label">UPI ID</label>
-                  <input className="f-input" type="text" value={form.upiId} onChange={e => set('upiId', e.target.value)} placeholder="yourname@upi" />
-                </div>
-              )}
-
-              {payMethod === 'cod' && (
-                <div style={{ background: 'var(--warm)', borderRadius: 14, padding: 20, border: '1px solid var(--border)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 22 }}>ℹ️</span>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>Pay ₹{total.toFixed(0)} in cash when your order is delivered. ₹20 COD fee applies.</p>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-                <button onClick={() => setStep(1)} style={{ flex: 1, background: '#fff', border: '1.5px solid var(--border-2)', borderRadius: 50, padding: 13, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-2)' }}>← Back</button>
-                <button className="next-btn" style={{ flex: 2, marginTop: 0 }} onClick={() => setStep(3)}>Review Order →</button>
+              {payMethod === 'card' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}><input className="input" placeholder="Card number" value={form.cardNumber} onChange={e => setField('cardNumber', e.target.value)} /><input className="input" placeholder="Expiry" value={form.cardExpiry} onChange={e => setField('cardExpiry', e.target.value)} /></div>}
+              {payMethod === 'upi' && <input className="input" style={{ marginTop: 10 }} placeholder="UPI ID" value={form.upiId} onChange={e => setField('upiId', e.target.value)} />}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
+                <button className="btn" onClick={() => setStep(3)}>Review Order</button>
               </div>
             </>
           )}
 
-          {/* Step 3 — Review */}
           {step === 3 && (
             <>
-              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Review Your Order</h2>
-              <div style={{ background: 'var(--warm)', borderRadius: 14, padding: 18, marginBottom: 20 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 10 }}>Delivering to</p>
-                <p style={{ fontWeight: 600, fontSize: 15 }}>{form.firstName} {form.lastName}</p>
-                <p style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 4 }}>{form.address}, {form.city}, {form.state} – {form.pin}</p>
-                <p style={{ color: 'var(--text-2)', fontSize: 13 }}>{form.phone} · {form.email}</p>
-              </div>
-              <div style={{ background: 'var(--warm)', borderRadius: 14, padding: 18, marginBottom: 20 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 10 }}>Payment</p>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>
-                  {payMethod === 'card'
-                    ? `Card ending ••••${form.cardNumber.slice(-4) || '----'}`
-                    : payMethod === 'upi'
-                    ? `UPI: ${form.upiId || '—'}`
-                    : 'Cash on Delivery'}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-                <button onClick={() => setStep(2)} style={{ flex: 1, background: '#fff', border: '1.5px solid var(--border-2)', borderRadius: 50, padding: 13, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-2)' }}>← Back</button>
-                <button className="next-btn" style={{ flex: 2, marginTop: 0 }} onClick={handleOrder} disabled={processing}>
-                  {processing ? '⏳ Placing Order…' : `Place Order · ₹${total.toFixed(0)}`}
-                </button>
+              <h2>Review & Place Order</h2>
+              <p style={{ marginTop: 8, color: '#6b5c4a' }}>{form.firstName} {form.lastName} · {form.phone}</p>
+              <p style={{ color: '#6b5c4a' }}>{form.address}, {form.city}, {form.state} - {form.pin}</p>
+              <p style={{ marginTop: 8, color: '#6b5c4a' }}>Payment: {payMethod.toUpperCase()}</p>
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
+                <button className="btn" onClick={placeOrder} disabled={processing}>{processing ? 'Placing Order...' : `Place Order · ₹${total.toFixed(0)}`}</button>
               </div>
             </>
           )}
         </div>
 
-        {/* Order Summary */}
-        <div className="order-sum" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 20, padding: 24, position: 'sticky', top: 80 }}>
-          <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700, marginBottom: 18 }}>Order Summary</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-            {cartItems.map(item => (
-              <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--warm)', flexShrink: 0, overflow: 'hidden' }}>
-                    {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
-                    <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Qty {item.quantity}</p>
-                  </div>
-                </div>
-                <span style={{ fontSize: 14, fontWeight: 700, flexShrink: 0 }}>₹{(item.price * item.quantity).toFixed(0)}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Subtotal</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>₹{subtotal.toFixed(0)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Shipping</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: shipping === 0 ? '#5a8a40' : 'var(--text)' }}>
-                {shipping === 0 ? 'FREE' : `₹${shipping}`}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 700 }}>Total</span>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 700, color: 'var(--gold)' }}>₹{total.toFixed(0)}</span>
-            </div>
-          </div>
-          <div style={{ marginTop: 20, padding: 12, background: 'var(--gold-pale)', borderRadius: 10, border: '1px solid #e8d089' }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)', textAlign: 'center' }}>🔒 256-bit SSL Secured Checkout</p>
-          </div>
-
-          {/* Past Orders (from server) */}
-          {orders.length > 0 && (
-            <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--text-3)', marginBottom: 10 }}>Your Past Orders</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {orders.slice(0, 3).map(order => (
-                  <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                    <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{order.order_number}</span>
-                    <span style={{ color: 'var(--text-3)' }}>₹{order.total_amount?.toFixed(0)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <aside className="card sticky" style={{ padding: 18, position: 'sticky', top: 80, height: 'fit-content' }}>
+          <h3 style={{ marginBottom: 10 }}>Order Summary</h3>
+          {cartItems.map(item => <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}><span>{item.name} × {item.quantity}</span><span>₹{(item.price*item.quantity).toFixed(0)}</span></div>)}
+          <hr style={{ border: 0, borderTop: '1px solid #eee2d2', margin: '10px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><strong>₹{subtotal.toFixed(0)}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shipping</span><strong>{shipping===0?'FREE':`₹${shipping}`}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}><strong>Total</strong><strong style={{ color: '#b8860b' }}>₹{total.toFixed(0)}</strong></div>
+          {orders?.length > 0 && <div style={{ marginTop: 12, fontSize: 12, color: '#6b5c4a' }}>Recent order: {orders[0].order_number}</div>}
+        </aside>
       </div>
     </div>
   )

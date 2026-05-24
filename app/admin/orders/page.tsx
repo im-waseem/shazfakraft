@@ -42,8 +42,6 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n)
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-const ageDays = (s: string) =>
-  Math.floor((Date.now() - new Date(s).getTime()) / 86_400_000)
 
 /* ─── Status configs ──────────────────────────────────────────────────────── */
 const ORDER_CFG: Record<string, { bg: string; text: string; dot: string }> = {
@@ -475,9 +473,7 @@ export default function AdminOrdersPage() {
     const supabase = createClient()
     const { error } = await supabase.from('orders').update(updates).eq('id', id)
     if (error) { showToast('Update failed: ' + error.message, 'err'); return }
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o))
-    // Also update invoiceOrder if it's open
-    setInvoiceOrder(prev => prev?.id === id ? { ...prev, ...updates } : prev)
+    await fetchOrders()
     showToast('Order updated', 'ok')
   }
 
@@ -487,7 +483,7 @@ export default function AdminOrdersPage() {
     const { error } = await supabase.from('orders').delete().eq('id', id)
     setDeletingId(null)
     if (error) { showToast('Delete failed: ' + error.message, 'err'); return }
-    setOrders(prev => prev.filter(o => o.id !== id))
+    await fetchOrders()
     if (invoiceOrder?.id === id) setInvoiceOrder(null)
     showToast('Order deleted', 'ok')
   }
@@ -604,8 +600,6 @@ export default function AdminOrdersPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {filtered.map((o, i) => {
               const c = Array.isArray(o.customers) ? o.customers[0] : o.customers
-              const days      = ageDays(o.created_at)
-              const canDelete = days >= 30
               const isDeleting   = deletingId === o.id
               const isConfirming = deleteConfirm === o.id
               const initials  = `${c?.first_name?.charAt(0)??''}${c?.last_name?.charAt(0)??''}` || '?'
@@ -693,7 +687,6 @@ export default function AdminOrdersPage() {
                       </select>
                     ))}
                     <div className="del-wrap">
-                      {!canDelete && <span className="del-hint">{30-days}d until deletable</span>}
                       {isConfirming ? (
                         <div className="del-confirm">
                           <span className="del-confirm-text">Delete permanently?</span>
@@ -701,7 +694,7 @@ export default function AdminOrdersPage() {
                           <button className="del-no" onClick={() => setDeleteConfirm(null)}>No</button>
                         </div>
                       ) : (
-                        <button className="del-btn" disabled={!canDelete||isDeleting} onClick={() => canDelete&&setDeleteConfirm(o.id)}>
+                        <button className="del-btn" disabled={isDeleting} onClick={() => setDeleteConfirm(o.id)}>
                           {isDeleting ? (
                             <svg className="spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display:'inline',verticalAlign:'middle',marginRight:4 }}>
                               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>

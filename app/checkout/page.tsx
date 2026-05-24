@@ -5,6 +5,19 @@ import CheckoutClient from './CheckoutClient'
 
 export default async function CheckoutPage() {
   const supabase = await createClient()
-  const orders = await getOrders(supabase)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  // Guest users can checkout without loading protected order history
+  let orders: any[] = []
+  if (user) {
+    try {
+      orders = await getOrders(supabase)
+    } catch {
+      orders = []
+    }
+  }
+
   return <CheckoutClient orders={orders} />
 }

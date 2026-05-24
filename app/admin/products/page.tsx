@@ -806,11 +806,16 @@ export default function AdminProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true)
+    const activeSizes = sizeRows.filter(r => !r._delete && r.is_active)
+    const computedInventory = activeSizes.length
+      ? activeSizes.reduce((sum, row) => sum + (Number(row.inventory_quantity) || 0), 0)
+      : (parseInt(String(formData.inventory_quantity)) || 0)
+
     const payload = {
       ...formData,
       price: parseFloat(String(formData.price))||0,
       compare_price: formData.compare_price ? parseFloat(String(formData.compare_price)) : null,
-      inventory_quantity: parseInt(String(formData.inventory_quantity))||0,
+      inventory_quantity: computedInventory,
       category_id: formData.category_id || null,
     }
     let productId = editing?.id ?? ''
@@ -1297,7 +1302,7 @@ export default function AdminProductsPage() {
                           </td>
                         </tr>
                       )}
-                    </Fragment>
+                     </Fragment>
                   )
                 })}
               </tbody>

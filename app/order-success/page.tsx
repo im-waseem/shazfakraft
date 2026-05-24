@@ -125,8 +125,8 @@ const orderNo = searchParams.get('orderNumber') || `SHF-${Date.now().toString().
           <Link href="/" style={{ flex: 1, minWidth: 160, display: 'block', background: 'var(--gold)', color: '#fff', padding: '14px 24px', borderRadius: 50, fontSize: 14, fontWeight: 700, textDecoration: 'none', textAlign: 'center', letterSpacing: '.04em' }}>
             Continue Shopping
           </Link>
-          <Link href="/orders" style={{ flex: 1, minWidth: 160, display: 'block', background: '#fff', color: 'var(--text)', padding: '14px 24px', borderRadius: 50, fontSize: 14, fontWeight: 700, textDecoration: 'none', textAlign: 'center', border: '1.5px solid var(--border-2)' }}>
-            View My Orders
+          <Link href={`/track-order?orderNumber=${encodeURIComponent(orderNo)}`} style={{ flex: 1, minWidth: 160, display: 'block', background: '#fff', color: 'var(--text)', padding: '14px 24px', borderRadius: 50, fontSize: 14, fontWeight: 700, textDecoration: 'none', textAlign: 'center', border: '1.5px solid var(--border-2)' }}>
+            Track This Order
           </Link>
         </div>
 

@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // 🛒 CUSTOMER ROUTES
-  const customerRoutes = ['/checkout', '/orders', '/profile', '/addresses']
+  const customerRoutes = ['/orders', '/profile', '/addresses']
 
   if (customerRoutes.includes(request.nextUrl.pathname) && !user) {
     const url = request.nextUrl.clone()
