@@ -22,7 +22,7 @@ services:
     networks:
       - coolify        # Coolify's Traefik discovers this container here
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
