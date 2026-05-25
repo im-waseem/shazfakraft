@@ -4,7 +4,7 @@
 # then do a fast stop → start swap (~3-5s gap on port 3038).
 set -euo pipefail
 
-APP_DIR="/var/www/shazfakraft"
+APP_DIR="$HOME/shazfakraft"
 cd "$APP_DIR"
 
 log() { echo "==> [$(date '+%Y-%m-%d %H:%M:%S')] $*"; }

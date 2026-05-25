@@ -3,7 +3,7 @@
 # Run on VPS: bash /var/www/shazfakraft/scripts/rollback.sh
 set -euo pipefail
 
-APP_DIR="/var/www/shazfakraft"
+APP_DIR="$HOME/shazfakraft"
 cd "$APP_DIR"
 
 log() { echo "==> [$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
