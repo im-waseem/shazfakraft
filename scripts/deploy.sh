@@ -51,7 +51,12 @@ COUNT=0
 until [ "$(docker inspect --format='{{.State.Health.Status}}' shazfakraft-app 2>/dev/null)" = "healthy" ]; do
   COUNT=$((COUNT + 1))
   if [ "$COUNT" -ge "$RETRIES" ]; then
-    echo "ERROR: Container failed healthcheck — rolling back"
+    echo "ERROR: Container failed healthcheck"
+    echo "── Container status:"
+    docker inspect --format='Status={{.State.Status}} ExitCode={{.State.ExitCode}}' shazfakraft-app
+    echo "── Last 60 lines of logs:"
+    docker logs --tail=60 shazfakraft-app 2>&1
+    echo "── Rolling back"
     docker tag shazfakraft-app:previous shazfakraft-app:latest 2>/dev/null || true
     docker compose up -d --force-recreate app
     exit 1
