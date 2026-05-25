@@ -10,10 +10,22 @@ cd "$APP_DIR"
 log() { echo "==> [$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 if [ ! -f "$APP_DIR/.env" ]; then
-  echo "ERROR: .env not found. Run: cp .env.example .env && nano .env"
+  echo "ERROR: .env not found at $APP_DIR/.env"
   exit 1
 fi
+
+# Source without -u so missing vars don't crash here
+set +u
 set -a; source "$APP_DIR/.env"; set +a
+set -u
+
+# Validate required vars with clear errors
+for var in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY; do
+  if [ -z "${!var:-}" ]; then
+    echo "ERROR: $var is not set in .env"
+    exit 1
+  fi
+done
 
 # ── 1. Build new image while old container is still serving ──
 log "Building new image (old container keeps running)"

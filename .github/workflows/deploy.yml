@@ -38,11 +38,12 @@ jobs:
 
       - name: Write .env to VPS
         run: |
+          printf '%s' "${{ secrets.ENV_FILE }}" | \
           ssh -i ~/.ssh/deploy_key \
               -p "${{ secrets.VPS_PORT }}" \
               -o StrictHostKeyChecking=no \
               "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-              "echo '${{ secrets.ENV_FILE }}' > \$HOME/shazfakraft/.env"
+              'cat > $HOME/shazfakraft/.env && chmod 600 $HOME/shazfakraft/.env'
 
       - name: Sync source code
         run: |
