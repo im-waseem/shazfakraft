@@ -33,7 +33,7 @@ function LoginForm() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap');
       @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
       .card{animation:rise .45s ease;background:#fff;border:1px solid #e8e0d4;border-radius:18px;padding:28px;width:100%;max-width:430px}
-      .input{width:100%;padding:12px 14px;border:1.5px solid #d4c8b8;border-radius:10px;outline:none}.input:focus{border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.12)}
+      .input{color:#1a1410;background-color:#ffffff;width:100%;padding:12px 14px;border:1.5px solid #d4c8b8;border-radius:10px;outline:none}.input:focus{border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.12)}
       .btn{width:100%;padding:12px;border-radius:999px;border:none;background:#b8860b;color:#fff;font-weight:700;cursor:pointer}
       .btn:disabled{opacity:.6;cursor:not-allowed}
       `}</style>

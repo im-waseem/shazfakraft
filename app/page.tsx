@@ -64,6 +64,7 @@ export default function Home() {
   const [addedId,            setAddedId]            = useState<string | null>(null)
   const [visibleCount,       setVisibleCount]       = useState(24)
   const [guestToast,         setGuestToast]         = useState(false)
+  const [showWaPopup,        setShowWaPopup]        = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const heroRef   = useRef<HTMLElement>(null)
@@ -89,6 +90,17 @@ export default function Home() {
       setCartCount(cart.reduce((s: number, i: any) => s + i.quantity, 0))
       setWishlist(JSON.parse(localStorage.getItem('wishlist') || '[]'))
     } catch {}
+  }, [])
+
+  // ── WhatsApp Popup Delay ───────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const dismissed = sessionStorage.getItem('wa-popup-dismissed')
+      if (!dismissed) {
+        setShowWaPopup(true)
+      }
+    }, 2500)
+    return () => clearTimeout(timer)
   }, [])
 
   // ── Banner auto-advance ─────────────────────────────────────────────────────
@@ -409,11 +421,149 @@ export default function Home() {
         .guest-banner-dismiss{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;line-height:1;margin-left:4px}
 
         /* ── WA BUBBLE ── */
-        .wa-bubble{position:fixed;bottom:22px;right:18px;width:52px;height:52px;border-radius:50%;background:#25d366;color:#fff;display:flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 8px 24px rgba(37,211,102,.4);z-index:60;font-size:22px;transition:transform .2s}
-        .wa-bubble:hover{transform:scale(1.1)}
+        .wa-container {
+          position: fixed;
+          bottom: 22px;
+          right: 18px;
+          z-index: 60;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+        }
+        .wa-bubble {
+          width: 54px;
+          height: 54px;
+          border-radius: 50%;
+          background: #25d366;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-decoration: none;
+          box-shadow: 0 8px 24px rgba(37,211,102,.35);
+          transition: all .3s cubic-bezier(.175, .885, .32, 1.275);
+          position: relative;
+          cursor: pointer;
+          animation: wa-bounce-wiggle 6s ease-in-out infinite;
+        }
+        .wa-bubble:hover {
+          animation: none;
+          transform: scale(1.1) translateY(-2px);
+          background: #20ba5a;
+          box-shadow: 0 10px 28px rgba(37,211,102,.5);
+        }
+        .wa-bubble::before {
+          content: '';
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 2px solid #25d366;
+          opacity: 0;
+          animation: wa-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+        }
+        @keyframes wa-pulse {
+          0% { transform: scale(0.95); opacity: 0.8; }
+          50% { opacity: 0.4; }
+          100% { transform: scale(1.2); opacity: 0; }
+        }
+        @keyframes wa-bounce-wiggle {
+          0%, 100% { transform: scale(1) translateY(0); }
+          10% { transform: scale(1.1) translateY(-6px) rotate(-5deg); }
+          20% { transform: scale(1.1) translateY(-6px) rotate(5deg); }
+          30% { transform: scale(1) translateY(0) rotate(0); }
+        }
+        .wa-popup {
+          position: absolute;
+          bottom: 72px;
+          right: 0;
+          width: 250px;
+          background: #ffffff;
+          border-radius: 16px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 10px rgba(0, 0, 0, 0.06);
+          border: 1px solid rgba(236, 220, 200, 0.6);
+          padding: 14px 16px;
+          z-index: 70;
+          animation: wa-popup-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .wa-popup:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 35px rgba(0, 0, 0, 0.16), 0 3px 12px rgba(0, 0, 0, 0.08);
+        }
+        @keyframes wa-popup-in {
+          from { opacity: 0; transform: translateY(15px) scale(0.9); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .wa-popup-arrow {
+          position: absolute;
+          bottom: -6px;
+          right: 22px;
+          width: 12px;
+          height: 12px;
+          background: #ffffff;
+          transform: rotate(45deg);
+          border-right: 1px solid rgba(236, 220, 200, 0.6);
+          border-bottom: 1px solid rgba(236, 220, 200, 0.6);
+        }
+        .wa-popup-close {
+          position: absolute;
+          top: 8px;
+          right: 10px;
+          background: none;
+          border: none;
+          color: #9a8a7a;
+          font-size: 18px;
+          font-weight: bold;
+          cursor: pointer;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: background 0.2s, color 0.2s;
+        }
+        .wa-popup-close:hover {
+          background: #fdf3e3;
+          color: #1c1410;
+        }
+        .wa-popup-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+        .wa-dot {
+          width: 7px;
+          height: 7px;
+          background-color: #25d366;
+          border-radius: 50%;
+          display: inline-block;
+          animation: wa-dot-pulse 1.5s infinite;
+        }
+        @keyframes wa-dot-pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.3); opacity: 0.5; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .wa-status {
+          font-size: 11px;
+          color: #6b7c5c;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .wa-popup-text {
+          font-size: 14px;
+          color: #1c1410;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 0;
+        }
 
         /* ── SCROLL TO TOP ── */
-        .scroll-top{position:fixed;bottom:84px;right:18px;width:38px;height:38px;border-radius:50%;background:#fff;border:1.5px solid var(--border2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);z-index:60;font-size:16px;transition:all .2s}
+        .scroll-top{position:fixed;bottom:22px;left:18px;width:38px;height:38px;border-radius:50%;background:#fff;border:1.5px solid var(--border2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);z-index:60;font-size:16px;transition:all .2s}
         .scroll-top:hover{border-color:var(--gold);color:var(--gold)}
 
         /* ── UTILITY ── */
@@ -700,9 +850,32 @@ export default function Home() {
 
       {/* ══ FLOATING BUTTONS ══════════════════════════════════════════════════ */}
       <button className="scroll-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
-      <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
-        💬
-      </a>
+      
+      <div className="wa-container">
+        {showWaPopup && (
+          <div className="wa-popup">
+            <button className="wa-popup-close" onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowWaPopup(false);
+              sessionStorage.setItem('wa-popup-dismissed', 'true');
+            }} aria-label="Close popup">×</button>
+            <div className="wa-popup-content" onClick={() => window.open("https://wa.me/916361236653", "_blank")}>
+              <div className="wa-popup-header">
+                <span className="wa-dot"></span>
+                <span className="wa-status">Online</span>
+              </div>
+              <p className="wa-popup-text">Hi! How can I help you?</p>
+            </div>
+            <div className="wa-popup-arrow"></div>
+          </div>
+        )}
+        <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+            <path d="M12.012 2C6.48 2 2 6.48 2 12.012c0 1.765.46 3.42 1.258 4.887L2 22l5.247-1.378a9.957 9.957 0 0 0 4.765 1.22c5.532 0 10.012-4.48 10.012-10.012S17.544 2 12.012 2zm6.757 14.288c-.282.788-1.42 1.442-1.956 1.503-.497.056-.99.27-3.178-.582-2.793-1.09-4.577-3.92-4.717-4.108-.138-.187-1.127-1.493-1.127-2.846 0-1.353.708-2.015.96-2.28.25-.264.55-.33.73-.33.18 0 .36 0 .52.008.173.007.404-.067.63.475.228.548.78 1.902.847 2.038.067.135.111.293.02.476-.09.18-.135.293-.27.45-.135.158-.283.353-.404.474-.136.136-.28.283-.12.557.16.273.712 1.17 1.528 1.89.1.088.196.175.29.256.713.626 1.238.835 1.488.986.25.152.395.127.542-.045.148-.172.63-.736.797-.986.167-.25.334-.21.56-.127.228.083 1.448.68 1.697.804.248.125.413.187.473.29.06.103.06.59-.22.378z" />
+          </svg>
+        </a>
+      </div>
 
       {/* Guest cart toast */}
       {guestToast && (

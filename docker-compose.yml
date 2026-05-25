@@ -1,0 +1,60 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    image: shazfakraft-app:latest
+    container_name: shazfakraft-app
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    volumes:
+      - nextjs_cache:/app/.next/cache
+    networks:
+      - coolify        # Coolify's Traefik discovers this container here
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      # ── Tell Traefik to pick up this container ──────────
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+
+      # ── HTTPS router ────────────────────────────────────
+      - "traefik.http.routers.shazfakraft.rule=Host(`shazfakraft.in`) || Host(`www.shazfakraft.in`)"
+      - "traefik.http.routers.shazfakraft.entrypoints=https"
+      - "traefik.http.routers.shazfakraft.tls=true"
+      - "traefik.http.routers.shazfakraft.tls.certresolver=letsencrypt"
+      - "traefik.http.services.shazfakraft.loadbalancer.server.port=3000"
+
+      # ── HTTP → HTTPS redirect ────────────────────────────
+      - "traefik.http.routers.shazfakraft-http.rule=Host(`shazfakraft.in`) || Host(`www.shazfakraft.in`)"
+      - "traefik.http.routers.shazfakraft-http.entrypoints=http"
+      - "traefik.http.routers.shazfakraft-http.middlewares=https-redirect@docker"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  coolify:
+    external: true   # already created and managed by Coolify
+
+volumes:
+  nextjs_cache:
+    driver: local
