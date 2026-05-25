@@ -37,6 +37,17 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
     cardNumber: '', cardExpiry: '', cardCvv: '', upiId: '',
   })
 
+  // ── Coupon state ──
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string
+    discount_amount: number
+    discount_type: string
+    discount_value: number
+  } | null>(null)
+  const [couponMsg, setCouponMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+
   const setField = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
@@ -68,7 +79,63 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
 
   const subtotal = useMemo(() => cartItems.reduce((s, i) => s + i.price * i.quantity, 0), [cartItems])
   const shipping = subtotal > 999 ? 0 : 49
-  const total = subtotal + shipping
+
+  // Price after coupon
+  const { discountAmount, totalBeforeDiscount, finalTotal } = useMemo(() => {
+    const beforeDiscount = subtotal + shipping
+    const disc = appliedCoupon ? appliedCoupon.discount_amount : 0
+    return {
+      discountAmount: disc,
+      totalBeforeDiscount: beforeDiscount,
+      finalTotal: Math.max(0, beforeDiscount - disc),
+    }
+  }, [subtotal, shipping, appliedCoupon])
+
+  // ── Apply coupon ──
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setValidatingCoupon(true)
+    setCouponMsg(null)
+
+    // Reset if same code re-applied
+    if (appliedCoupon && appliedCoupon.code === couponCode.trim().toUpperCase()) {
+      setAppliedCoupon(null)
+      setCouponCode('')
+      setValidatingCoupon(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponCode, orderTotal: subtotal + shipping }),
+      })
+      const data = await res.json()
+      if (data.valid) {
+        setAppliedCoupon({
+          code: data.coupon_code,
+          discount_amount: data.discount_amount,
+          discount_type: data.discount_type,
+          discount_value: data.discount_value,
+        })
+        setCouponMsg({ type: 'success', text: data.message })
+        setCouponCode('')
+      } else {
+        setAppliedCoupon(null)
+        setCouponMsg({ type: 'error', text: data.message })
+      }
+    } catch {
+      setCouponMsg({ type: 'error', text: 'Failed to validate coupon' })
+    }
+    setValidatingCoupon(false)
+  }
+
+  // ── Remove applied coupon ──
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponMsg(null)
+  }
 
   const placeOrder = async () => {
     setProcessing(true)
@@ -84,6 +151,8 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
           },
           billing: { address: form.address, city: form.city, state: form.state, pincode: form.pin },
           notes: `Payment method: ${payMethod}`,
+          coupon_code: appliedCoupon?.code || null,
+          discount_amount: appliedCoupon?.discount_amount || 0,
         }),
       })
       const json = await res.json()
@@ -109,6 +178,9 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
       .ghost{background:#fff;border:1.5px solid #d4c8b8;color:#6b5c4a}.card{background:#fff;border:1px solid #e8e0d4;border-radius:16px}
       .pay{border:1.5px solid #d4c8b8;border-radius:12px;padding:12px;cursor:pointer}.pay.active{border-color:#b8860b;background:#fef9ed}
       @media(max-width:860px){.grid{grid-template-columns:1fr!important}.sticky{position:static!important}}
+      .cpn-input{flex:1;padding:10px 12px;border:1.5px solid #d4c8b8;border-radius:8px;font-size:13px;font-family:monospace;text-transform:uppercase;outline:none}
+      .cpn-input:focus{border-color:#b8860b}
+      .cpn-applied{background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:10px 14px}
       `}</style>
 
       <header style={{ background: '#fff', borderBottom: '1px solid #e8e0d4', padding: '0 20px' }}>
@@ -171,9 +243,17 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
               <p style={{ marginTop: 8, color: '#6b5c4a' }}>{form.firstName} {form.lastName} · {form.phone}</p>
               <p style={{ color: '#6b5c4a' }}>{form.address}, {form.city}, {form.state} - {form.pin}</p>
               <p style={{ marginTop: 8, color: '#6b5c4a' }}>Payment: {payMethod.toUpperCase()}</p>
+              {appliedCoupon && (
+                <div className="cpn-applied" style={{ marginTop: 8 }}>
+                  <span style={{ fontWeight: 700, color: '#15803d' }}>✓ {appliedCoupon.code}</span>
+                  <span style={{ marginLeft: 8, color: '#15803d' }}>−₹{appliedCoupon.discount_amount.toFixed(0)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                 <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-                <button className="btn" onClick={placeOrder} disabled={processing}>{processing ? 'Placing Order...' : `Place Order · ₹${total.toFixed(0)}`}</button>
+                <button className="btn" onClick={placeOrder} disabled={processing}>
+                  {processing ? 'Placing Order...' : `Place Order · ₹${finalTotal.toFixed(0)}`}
+                </button>
               </div>
             </>
           )}
@@ -182,10 +262,90 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
         <aside className="card sticky" style={{ padding: 18, position: 'sticky', top: 80, height: 'fit-content' }}>
           <h3 style={{ marginBottom: 10 }}>Order Summary</h3>
           {cartItems.map(item => <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}><span>{item.name} × {item.quantity}</span><span>₹{(item.price*item.quantity).toFixed(0)}</span></div>)}
+
           <hr style={{ border: 0, borderTop: '1px solid #eee2d2', margin: '10px 0' }} />
+
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><strong>₹{subtotal.toFixed(0)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shipping</span><strong>{shipping===0?'FREE':`₹${shipping}`}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}><strong>Total</strong><strong style={{ color: '#b8860b' }}>₹{total.toFixed(0)}</strong></div>
+
+          {/* Coupon section */}
+          <div style={{ margin: '12px 0', padding: '12px 0', borderTop: '1px solid #eee2d2', borderBottom: '1px solid #eee2d2' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6b5c4a', marginBottom: 6 }}>Have a coupon?</div>
+
+            {appliedCoupon ? (
+              <div className="cpn-applied">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontWeight: 800, fontSize: 13, color: '#15803d' }}>{appliedCoupon.code}</span>
+                    <span style={{ fontSize: 12, color: '#15803d', marginLeft: 6 }}>
+                      {appliedCoupon.discount_type === 'percentage'
+                        ? `(${appliedCoupon.discount_value}% off)`
+                        : `(₹${appliedCoupon.discount_value} off)`}
+                    </span>
+                  </div>
+                  <button onClick={handleRemoveCoupon} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 16, padding: '0 4px' }} title="Remove">✕</button>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', marginTop: 4 }}>
+                  −₹{appliedCoupon.discount_amount.toFixed(0)}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    className="cpn-input"
+                    placeholder="Enter coupon code"
+                    value={couponCode}
+                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === 'Enter') handleApplyCoupon() }}
+                  />
+                  <button
+                    onClick={handleApplyCoupon}
+                    disabled={validatingCoupon || !couponCode.trim()}
+                    style={{
+                      padding: '10px 14px', background: '#b8860b', color: '#fff', border: 'none',
+                      borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                      opacity: validatingCoupon || !couponCode.trim() ? 0.6 : 1,
+                    }}
+                  >
+                    {validatingCoupon ? '...' : 'Apply'}
+                  </button>
+                </div>
+                {couponMsg && (
+                  <div style={{
+                    fontSize: 12, marginTop: 6, padding: '6px 10px', borderRadius: 6,
+                    fontWeight: 600,
+                    background: couponMsg.type === 'success' ? '#f0fdf4' : '#fff1f1',
+                    color: couponMsg.type === 'success' ? '#15803d' : '#b42318',
+                  }}>
+                    {couponMsg.text}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Totals */}
+          {appliedCoupon && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b5c4a', fontSize: 13 }}>
+              <span>Subtotal + Shipping</span>
+              <span>₹{totalBeforeDiscount.toFixed(0)}</span>
+            </div>
+          )}
+          {appliedCoupon && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803d', fontSize: 13 }}>
+              <span>Discount ({appliedCoupon.code})</span>
+              <strong>−₹{discountAmount.toFixed(0)}</strong>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}>
+            <strong>Total</strong>
+            <strong style={{ color: appliedCoupon ? '#15803d' : '#b8860b' }}>
+              ₹{finalTotal.toFixed(0)}
+              {appliedCoupon && <span style={{ fontSize: 11, color: '#999', fontWeight: 500, display: 'block', textAlign: 'right' }}>(incl. discount)</span>}
+            </strong>
+          </div>
+
           {orders?.length > 0 && <div style={{ marginTop: 12, fontSize: 12, color: '#6b5c4a' }}>Recent order: {orders[0].order_number}</div>}
         </aside>
       </div>

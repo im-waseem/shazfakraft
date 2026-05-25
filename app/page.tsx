@@ -33,7 +33,7 @@ const DEFAULT_ANNOUNCEMENTS = [
   'Free shipping on orders over ₹499 ✦ Shop now',
   'Authentic Islamic products, ethically sourced',
   'New arrivals added every week',
-  'Trusted by 5,000+ happy customers across India',
+  'Trusted by 50+ happy customers across India',
 ]
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -284,14 +284,6 @@ export default function Home() {
         .cat-card-icon{width:48px;height:48px;border-radius:50%;background:var(--gold-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px}
         .cat-card-name{font-size:12px;font-weight:700;line-height:1.3}
 
-        /* ── FEATURE STRIP ── */
-        .feature-strip{background:linear-gradient(135deg,#1c1410,#3d2112);padding:32px 20px;width:100%}
-        .feature-inner{max-width:1340px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px}
-        .feature-item{display:flex;align-items:center;gap:14px;color:#fff}
-        .feature-icon{width:44px;height:44px;border-radius:12px;background:rgba(200,134,10,.2);border:1px solid rgba(200,134,10,.3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-        .feature-label{font-size:13px;font-weight:700;color:#e8d5b0}
-        .feature-desc{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px}
-
         /* ── MAIN LAYOUT ── */
         /* flex:1 on main-wrap makes it grow to fill space, pushing footer down */
         .page-body{flex:1;width:100%}
@@ -445,105 +437,9 @@ export default function Home() {
         )}
       </div>
 
-      {/* ══ NAVBAR ════════════════════════════════════════════════════════════ */}
-      <header className="navbar">
-        <div className="nav-inner">
-          {/* Burger */}
-          <button className="burger" onClick={() => setMobileMenuOpen(true)} aria-label="Menu">
-            <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          {/* Logo */}
-          <Link href="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
-            <span className="logo-mark">Shazfa kraft<span className="logo-sub">Islamic Store</span></span>
-          </Link>
-
-          {/* Desktop nav */}
-          <nav className="nav-desktop" style={{ display: 'flex', gap: 28, marginLeft: 20 }}>
-            {[['/', 'Home'], ['/products', 'Products'], ['/track-order', 'Track Order'], ['/about', 'About'], ['/contact', 'Contact']].map(([href, label]) => (
-              <Link key={href} href={href} className="nav-link">{label}</Link>
-            ))}
-          </nav>
-
-          <div style={{ flex: 1 }} />
-
-          {/* Icons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link href="/wishlist" className="nav-icon-btn" aria-label="Wishlist">
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              {wishlist.length > 0 && <span className="nav-badge" style={{ background: '#c04e2a' }}>{wishlist.length}</span>}
-            </Link>
-            <Link href="/cart" className="nav-icon-btn" aria-label="Cart">
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {cartCount > 0 && <span className="nav-badge" style={{ background: 'var(--gold)' }}>{cartCount}</span>}
-            </Link>
-
-            {/* Auth: show login/profile but NEVER block purchasing */}
-            {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
-                <Link href="/profile" style={{ textDecoration: 'none' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--gold-pale)', border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-                    {user.email?.[0]?.toUpperCase()}
-                  </div>
-                </Link>
-                <form action="/auth/signout" method="post" style={{ display: 'none' }} id="signout-form">
-                  <button type="submit" />
-                </form>
-                <button onClick={() => (document.getElementById('signout-form') as HTMLFormElement)?.submit()}
-                  style={{ background: 'none', border: '1.5px solid var(--border2)', color: 'var(--t2)', borderRadius: 8, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
-                  Out
-                </button>
-              </div>
-            ) : (
-              // Guest: show Sign In as optional, not mandatory
-              <Link href="/login" style={{ background: 'var(--gold)', color: '#fff', padding: '8px 18px', borderRadius: 50, fontSize: 12, fontWeight: 800, textDecoration: 'none', letterSpacing: '.04em', marginLeft: 6 }}>
-                Sign In
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
-
       {/* ── Guest nudge banner (only for non-logged-in, dismissible) ─────── */}
       {!user && (
         <GuestBanner />
-      )}
-
-      {/* ══ MOBILE MENU ═══════════════════════════════════════════════════════ */}
-      {mobileMenuOpen && (
-        <div className="mob-menu">
-          <div className="mob-menu-overlay" onClick={() => setMobileMenuOpen(false)} />
-          <div className="mob-menu-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700, color: 'var(--gold)' }}>Menu</span>
-              <button onClick={() => setMobileMenuOpen(false)} style={{ background: '#f5f5f5', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-            </div>
-            {[['/', 'Home', '🏠'], ['/products', 'Products', '🛍'], ['/track-order', 'Track Order', '📦'], ['/wishlist', 'Wishlist', '❤️'], ['/cart', 'Cart', '🛒'], ['/profile', 'Profile', '👤'], ['/about', 'About', 'ℹ️'], ['/contact', 'Contact', '📞']].map(([href, label, icon]) => (
-              <Link key={href} href={href} className="mob-nav-link" onClick={() => setMobileMenuOpen(false)}>
-                <span style={{ marginRight: 10 }}>{icon}</span>{label}
-              </Link>
-            ))}
-            {!user && (
-              <div style={{ marginTop: 12, padding: '14px', background: 'var(--warm)', borderRadius: 10 }}>
-                <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10, fontWeight: 600 }}>Sign in to track orders & save your wishlist</p>
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)}
-                  style={{ background: 'var(--gold)', color: '#fff', display: 'block', textAlign: 'center', padding: '10px', borderRadius: 8, fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>
-                  Sign In / Register
-                </Link>
-                <Link href="/checkout" onClick={() => setMobileMenuOpen(false)}
-                  style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: 'var(--t2)', textDecoration: 'none', marginTop: 6 }}>
-                  Continue as Guest →
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
       )}
 
       {/* ══ PAGE BODY (flex:1) ════════════════════════════════════════════════ */}
@@ -593,26 +489,6 @@ export default function Home() {
             </div>
           )}
         </section>
-
-        {/* ══ FEATURE STRIP ════════════════════════════════════════════════════ */}
-        <div className="feature-strip">
-          <div className="feature-inner">
-            {[
-              { icon: '🚚', label: 'Free Shipping',      desc: 'On orders above ₹499'         },
-              { icon: '✅', label: 'Authentic Products',  desc: 'Ethically sourced & verified'  },
-              { icon: '🔄', label: 'Easy Returns',        desc: '7-day hassle-free returns'     },
-              { icon: '🛒', label: 'Guest Checkout',      desc: 'No account needed to order'    },
-            ].map(f => (
-              <div key={f.label} className="feature-item">
-                <div className="feature-icon">{f.icon}</div>
-                <div>
-                  <p className="feature-label">{f.label}</p>
-                  <p className="feature-desc">{f.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* ══ CATEGORY SHOWCASE ════════════════════════════════════════════════ */}
         {categories.length > 0 && !searchQuery && selectedCategories.length === 0 && (

@@ -27,6 +27,8 @@ interface Order {
   total_amount:        number
   subtotal_amount?:    number
   shipping_amount?:    number
+  coupon_code?:        string | null
+  discount_amount?:    number
   status:              string
   payment_status:      string
   fulfillment_status:  string
@@ -289,6 +291,8 @@ function InvoiceModal({ order, onClose }: { order: Order; onClose: () => void })
   const addr = order.shipping_address ?? {}
   const subtotal     = order.subtotal_amount  ?? order.items.reduce((s, i) => s + (i.total ?? i.price * i.quantity), 0)
   const shipping     = order.shipping_amount  ?? 0
+  const couponCode   = order.coupon_code ?? null
+  const discount     = Number(order.discount_amount) || 0
   const total        = order.total_amount
 
   const handlePrint = () => window.print()
@@ -406,6 +410,14 @@ function InvoiceModal({ order, onClose }: { order: Order; onClose: () => void })
                 <span className="inv-total-key">Shipping</span>
                 <span className="inv-total-val">{shipping === 0 ? 'Free' : fmt(shipping)}</span>
               </div>
+              {couponCode && discount > 0 && (
+                <div className="inv-total-row" style={{ color:'#15803d' }}>
+                  <span className="inv-total-key">
+                    Discount <span style={{ fontWeight:700, fontFamily:'monospace', fontSize:11 }}>({couponCode})</span>
+                  </span>
+                  <span className="inv-total-val" style={{ color:'#15803d' }}>−{fmt(discount)}</span>
+                </div>
+              )}
               <div className="inv-total-row grand">
                 <span>Total</span>
                 <span className="inv-total-val">{fmt(total)}</span>
@@ -460,7 +472,7 @@ export default function AdminOrdersPage() {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('orders')
-      .select('id,order_number,total_amount,subtotal_amount,shipping_amount,status,payment_status,fulfillment_status,created_at,shipping_address,items,payment_method,customers(first_name,last_name,email,phone)')
+      .select('id,order_number,total_amount,subtotal_amount,shipping_amount,coupon_code,discount_amount,status,payment_status,fulfillment_status,created_at,shipping_address,items,payment_method,customers(first_name,last_name,email,phone)')
       .order('created_at', { ascending: false })
     if (error) { showToast('Failed to load orders: ' + error.message, 'err'); setLoading(false); return }
     setOrders((data || []) as Order[])

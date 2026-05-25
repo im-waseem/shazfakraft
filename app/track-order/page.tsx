@@ -31,7 +31,6 @@ const FLOW = ['pending', 'confirmed', 'processing', 'shipped', 'delivered']
 export default function TrackOrderPage() {
   const whatsappNumber = '916361236653'
   const [orderNumber, setOrderNumber] = useState('')
-  const [phoneOrEmail, setPhoneOrEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [order, setOrder] = useState<TrackOrder | null>(null)
@@ -54,11 +53,7 @@ export default function TrackOrderPage() {
     setError('')
     setOrder(null)
     try {
-      const isEmail = phoneOrEmail.includes('@')
       const q = new URLSearchParams({ orderNumber: orderNumber.trim() })
-      if (isEmail) q.set('email', phoneOrEmail.trim())
-      else q.set('phone', phoneOrEmail.trim())
-
       const res = await fetch(`/api/orders?${q.toString()}`)
       const json = await res.json()
       if (!res.ok) {
@@ -89,12 +84,11 @@ export default function TrackOrderPage() {
     <div style={{ minHeight: '100vh', background: '#fffbf5', padding: 20, fontFamily: 'system-ui' }}>
       <div style={{ maxWidth: 850, margin: '0 auto', background: '#fff', border: '1px solid #eadfce', borderRadius: 16, padding: 20 }}>
         <h1 style={{ marginBottom: 8 }}>Track Order</h1>
-        <p style={{ color: '#7a6a58', marginBottom: 16 }}>Track with Order ID (example: ORD-20260520-48c3de) and phone/email.</p>
+        <p style={{ color: '#7a6a58', marginBottom: 16 }}>Enter your Order ID to track (example: ORD-20260520-48c3de).</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10 }}>
-          <input value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="Order ID" style={{ padding: 10, border: '1px solid #d8c9b4', borderRadius: 10 }} />
-          <input value={phoneOrEmail} onChange={e => setPhoneOrEmail(e.target.value)} placeholder="Phone or Email" style={{ padding: 10, border: '1px solid #d8c9b4', borderRadius: 10 }} />
-          <button onClick={handleTrack} disabled={loading || !orderNumber || !phoneOrEmail} style={{ padding: '10px 16px', borderRadius: 10, border: 0, background: '#1f1a16', color: '#fff', fontWeight: 700 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
+          <input value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="Order ID" style={{ padding: 10, border: '1px solid #d8c9b4', borderRadius: 10 }} onKeyDown={e => { if (e.key === 'Enter' && orderNumber.trim()) handleTrack() }} />
+          <button onClick={handleTrack} disabled={loading || !orderNumber.trim()} style={{ padding: '10px 16px', borderRadius: 10, border: 0, background: '#1f1a16', color: '#fff', fontWeight: 700 }}>
             {loading ? 'Tracking…' : 'Track'}
           </button>
         </div>

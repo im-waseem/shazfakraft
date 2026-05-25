@@ -2,7 +2,7 @@
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useCallback, use, useEffect, useState, useRef } from 'react'
+import { useCallback, use, useEffect, useState, useRef, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ─── Zoom Viewer Component ───────────────────────────────────────────────────
@@ -300,7 +300,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [addedToCart,   setAddedToCart]   = useState(false)
   const [isWishlisted,  setIsWishlisted]  = useState(false)
   const [activeTab,     setActiveTab]     = useState<'description'|'shipping'|'reviews'>('description')
-  const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
+const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
+const ProductReviews = lazy(() => import('@/components/ProductReviews'))
   const [priceFlash,      setPriceFlash]      = useState(false)
   const [colorDropOpen,   setColorDropOpen]   = useState(false)
   const [zoomViewerOpen,  setZoomViewerOpen]  = useState(false)
@@ -1069,11 +1070,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             </div>
           )}
           {activeTab === 'reviews' && (
-            <div style={{ textAlign:'center', padding:'28px 0', color:'#bbb' }}>
-              <p style={{ fontSize:40, marginBottom:12 }}>⭐</p>
-              <p style={{ fontSize:15, fontWeight:700, color:'#777' }}>No reviews yet</p>
-              <p style={{ fontSize:13, marginTop:6 }}>Be the first to review this product.</p>
-            </div>
+            <Suspense fallback={
+              <div style={{ textAlign:'center', padding:'28px 0', color:'#bbb' }}>
+                <div style={{ width:28, height:28, border:'2.5px solid #ede9e0', borderTopColor:'#b8860b', borderRadius:'50%', animation:'spin 0.7s linear infinite', margin:'0 auto 12px' }} />
+                <p style={{ fontSize:13, color:'#999' }}>Loading reviews...</p>
+              </div>
+            }>
+              <ProductReviews productId={product.id} productName={product.name} />
+            </Suspense>
           )}
         </div>
       </div>

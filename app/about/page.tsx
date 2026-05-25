@@ -408,7 +408,7 @@ export default function AboutPage() {
                       textTransform: "uppercase",
                     }}
                   >
-                    Founder, Syed Shaiz
+                    Founder, Waseem Akram
                   </p>
                 </div>
               </div>

@@ -85,6 +85,8 @@ export async function POST(req: Request) {
         pincode: billing.pincode || shipping.pincode,
         country: 'India',
       },
+      coupon_code: body.coupon_code || null,
+      discount_amount: Number(body.discount_amount) || 0,
       notes,
     })
 
@@ -128,20 +130,6 @@ export async function GET(req: Request) {
     }
 
     const ship = (order.shipping_address || {}) as any
-    const orderPhone = String(ship.phone || '').trim()
-    const orderEmail = String(ship.email || '').trim().toLowerCase()
-
-    // Guest-safe verification: require phone or email match
-    if (!phone && !email) {
-      return NextResponse.json({ error: 'Please provide phone or email to verify order' }, { status: 400 })
-    }
-
-    const phoneOk = phone ? orderPhone === phone : false
-    const emailOk = email ? orderEmail === email : false
-    if (!phoneOk && !emailOk) {
-      return NextResponse.json({ error: 'Order verification failed' }, { status: 403 })
-    }
-
     return NextResponse.json({ success: true, order })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Unexpected error' }, { status: 500 })

@@ -385,10 +385,15 @@ CREATE POLICY "Admin can view all orders" ON orders
   FOR SELECT
   USING (is_admin());
 
-CREATE POLICY "Admin can update all orders" ON orders
+-- Admin can manage orders (including delete)
+CREATE POLICY "Admin can manage orders" ON orders
   FOR ALL
   USING (is_admin())
   WITH CHECK (is_admin());
+
+CREATE POLICY "Admin can delete orders" ON orders
+  FOR DELETE
+  USING (is_admin());
 
 -- Create order items table (for detailed tracking)
 CREATE TABLE IF NOT EXISTS order_items (

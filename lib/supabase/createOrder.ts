@@ -11,6 +11,8 @@ interface CreateOrderInput {
   shipping_address?: any
   billing_address?: any
   notes?: string
+  coupon_code?: string | null
+  discount_amount?: number
 }
 
 export async function createOrder(input: CreateOrderInput) {
@@ -22,11 +24,12 @@ export async function createOrder(input: CreateOrderInput) {
     total: item.price * item.quantity,
   }))
 
-  // ✅ Calculate totals
+  // ✅ Calculate totals with coupon
   const subtotal = items.reduce((sum, i) => sum + i.total, 0)
   const tax_amount = 0
   const shipping_amount = 0
-  const discount_amount = 0
+  const coupon_code = input.coupon_code || null
+  const discount_amount = Number(input.discount_amount) || 0
   const total_amount = subtotal + tax_amount + shipping_amount - discount_amount
 
   // ✅ Generate order number
@@ -50,6 +53,7 @@ export async function createOrder(input: CreateOrderInput) {
       total_amount,
       currency: 'INR',
 
+      coupon_code,
       items,
       shipping_address: input.shipping_address ?? {},
       billing_address: input.billing_address ?? {},
