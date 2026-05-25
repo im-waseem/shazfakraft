@@ -381,11 +381,13 @@ function VariantMatrix({ variants }: { variants: ProductVariant[] }) {
 function SplitVariantEditor({
   sizeRows, colorRows,
   onSizeChange, onColorChange,
+  showToast,
 }: {
   sizeRows: SizeRow[]
   colorRows: ColorRow[]
   onSizeChange: (r: SizeRow[]) => void
   onColorChange: (r: ColorRow[]) => void
+  showToast: (msg: string, ok?: boolean) => void
 }) {
   const supabase = createClient()
 
@@ -410,7 +412,7 @@ function SplitVariantEditor({
   const uploadColorImage = async (rowId: string, file: File) => {
     const path = `products/variants/${Date.now()}-${file.name}`
     const { data, error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error || !data) return
+    if (error || !data) { showToast(error?.message || 'Color image upload failed', false); return }
     const url = supabase.storage.from('product-images').getPublicUrl(data.path).data.publicUrl
     updateColor(rowId, { image_url: url })
   }
@@ -861,7 +863,7 @@ export default function AdminProductsPage() {
   const uploadImage = async (file: File, folder = 'products') => {
     const path = `${folder}/${Date.now()}-${file.name}`
     const { data, error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error || !data) return ''
+    if (error || !data) { showToast(error?.message || 'Upload failed', false); return '' }
     return supabase.storage.from('product-images').getPublicUrl(data.path).data.publicUrl
   }
 
@@ -1089,6 +1091,7 @@ export default function AdminProductsPage() {
                   colorRows={colorRows}
                   onSizeChange={setSizeRows}
                   onColorChange={setColorRows}
+                  showToast={showToast}
                 />
               </div>
 

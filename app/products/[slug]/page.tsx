@@ -5,6 +5,201 @@ import Link from 'next/link'
 import { useCallback, use, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
+/* ─── Zoom Viewer Component ───────────────────────────────────────────────────
+   Full-screen image viewer with pinch-to-zoom, pan, and smooth animations.
+───────────────────────────────────────────────────────────────────────────────*/
+function ZoomViewer({
+  images, selectedIndex, onClose, onPrev, onNext,
+}: {
+  images: string[]
+  selectedIndex: number
+  onClose: () => void
+  onPrev: () => void
+  onNext: () => void
+}) {
+  const imgRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  const [translate, setTranslate] = useState({ x: 0, y: 0 })
+  const lastTouchRef = useRef<{ x: number; y: number; dist?: number }>({ x: 0, y: 0 })
+  const isPanning = useRef(false)
+  const animFrame = useRef<number>(0)
+
+  const reset = () => { setScale(1); setTranslate({ x: 0, y: 0 }) }
+
+  const handleImageClick = (e: React.MouseEvent) => {
+    if (scale > 1) { reset(); return }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+    const newScale = 2.5
+    setScale(newScale)
+    setTranslate({
+      x: (0.5 - x) * rect.width * 0.7,
+      y: (0.5 - y) * rect.height * 0.7,
+    })
+  }
+
+  // Touch handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      isPanning.current = true
+    } else if (e.touches.length === 2) {
+      isPanning.current = false
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastTouchRef.current.dist = Math.sqrt(dx * dx + dy * dy)
+    }
+  }
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && isPanning.current && scale > 1) {
+      cancelAnimationFrame(animFrame.current)
+      animFrame.current = requestAnimationFrame(() => {
+        const dx = e.touches[0].clientX - lastTouchRef.current.x
+        const dy = e.touches[0].clientY - lastTouchRef.current.y
+        setTranslate(prev => ({ x: prev.x + dx, y: prev.y + dy }))
+        lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      })
+    } else if (e.touches.length === 2) {
+      e.preventDefault()
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (lastTouchRef.current.dist) {
+        const newScale = Math.max(1, Math.min(5, scale * (dist / lastTouchRef.current.dist)))
+        setScale(newScale)
+      }
+      lastTouchRef.current.dist = dist
+    }
+  }
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    isPanning.current = false
+    lastTouchRef.current.dist = undefined
+    if (scale <= 1.01 && Math.abs(e.changedTouches[0].clientX - lastTouchRef.current.x) > 50) {
+      if (e.changedTouches[0].clientX - lastTouchRef.current.x < 0) onNext()
+      else onPrev()
+    }
+  }
+
+  // Double-tap detection
+  const lastTapRef = useRef(0)
+  const onTap = () => {
+    const now = Date.now()
+    if (now - lastTapRef.current < 300) {
+      if (scale > 1) reset()
+      else setScale(2.5)
+    }
+    lastTapRef.current = now
+  }
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') onPrev()
+      if (e.key === 'ArrowRight') onNext()
+    }
+    window.addEventListener('keydown', handleKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose, onPrev, onNext])
+
+  useEffect(() => { reset() }, [selectedIndex])
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,.92)',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      animation:'zvFadeIn .25s ease both', touchAction:'none',
+    }}>
+      <style>{`
+        @keyframes zvFadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes zvScaleIn { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:scale(1)} }
+        @keyframes zvPulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+        .zv-img-wrap { animation:zvScaleIn .3s cubic-bezier(.16,1,.3,1) both; }
+        .zv-close {
+          position:fixed; top:16px; right:16px; z-index:10; width:40px; height:40px;
+          border-radius:50%; border:none; background:rgba(255,255,255,.12);
+          color:#fff; font-size:20px; cursor:pointer; display:flex;
+          align-items:center; justify-content:center;
+          backdrop-filter:blur(8px); transition:all .2s;
+        }
+        .zv-close:hover { background:rgba(255,255,255,.25); transform:scale(1.1); }
+        .zv-nav {
+          position:fixed; top:50%; transform:translateY(-50%); z-index:10;
+          width:44px; height:44px; border-radius:50%; border:none;
+          background:rgba(255,255,255,.1); color:#fff; cursor:pointer;
+          display:flex; align-items:center; justify-content:center;
+          backdrop-filter:blur(8px); transition:all .2s;
+        }
+        .zv-nav:hover { background:rgba(255,255,255,.25); transform:translateY(-50%) scale(1.1); }
+        .zv-nav:disabled { opacity:.2; cursor:default; transform:translateY(-50%); }
+        .zv-nav.prev { left:12px; }
+        .zv-nav.next { right:12px; }
+        .zv-counter {
+          position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+          z-index:10; color:rgba(255,255,255,.6); font-size:13px; font-weight:600;
+          letter-spacing:.06em; background:rgba(0,0,0,.5); padding:5px 14px;
+          border-radius:50px; backdrop-filter:blur(8px);
+        }
+        .zv-hint {
+          position:fixed; bottom:56px; left:50%; transform:translateX(-50%);
+          z-index:10; color:rgba(255,255,255,.4); font-size:11px;
+          animation:zvPulse 2s ease-in-out infinite;
+          background:rgba(0,0,0,.3); padding:4px 12px; border-radius:50px;
+          backdrop-filter:blur(4px); white-space:nowrap;
+        }
+        .zv-drag-cursor { cursor: grab; }
+        .zv-drag-cursor:active { cursor: grabbing; }
+      `}</style>
+
+      <button className="zv-close" onClick={onClose} aria-label="Close">✕</button>
+
+      <button className="zv-nav prev" onClick={onPrev} disabled={selectedIndex <= 0} aria-label="Previous">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button className="zv-nav next" onClick={onNext} disabled={selectedIndex >= images.length - 1} aria-label="Next">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      {images.length > 1 && <div className="zv-counter">{selectedIndex + 1} / {images.length}</div>}
+      {scale <= 1 && <div className="zv-hint">Pinch to zoom · Tap arrows to navigate</div>}
+
+      <div
+        ref={imgRef}
+        className="zv-img-wrap zv-drag-cursor"
+        onClick={handleImageClick}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onDoubleClick={handleImageClick}
+        style={{
+          width:'90vw', height:'90vh',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
+          transition: scale > 1 && isPanning.current ? 'none' : 'transform .35s cubic-bezier(.16,1,.3,1)',
+          willChange:'transform',
+        }}
+      >
+        <img
+          src={images[selectedIndex]}
+          alt=""
+          style={{
+            maxWidth:'100%', maxHeight:'100%', objectFit:'contain',
+            borderRadius:4, userSelect:'none', pointerEvents:'none',
+            boxShadow:'0 8px 40px rgba(0,0,0,.4)',
+          }}
+          draggable={false}
+        />
+      </div>
+    </div>
+  )
+}
+
 /* ─── Types ──────────────────────────────────────────────────────────────────*/
 interface Product {
   id: string; name: string; slug: string; description: string
@@ -106,8 +301,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [isWishlisted,  setIsWishlisted]  = useState(false)
   const [activeTab,     setActiveTab]     = useState<'description'|'shipping'|'reviews'>('description')
   const [moreProducts,  setMoreProducts]  = useState<Product[]>([])
-  const [priceFlash,    setPriceFlash]    = useState(false)
-  const [colorDropOpen, setColorDropOpen] = useState(false)
+  const [priceFlash,      setPriceFlash]      = useState(false)
+  const [colorDropOpen,   setColorDropOpen]   = useState(false)
+  const [zoomViewerOpen,  setZoomViewerOpen]  = useState(false)
 
   const colorDropRef = useRef<HTMLDivElement>(null)
 
@@ -612,7 +808,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
             >
-              <div className="sk-img-main">
+              <div className="sk-img-main" onClick={() => setZoomViewerOpen(true)} style={{ cursor: 'zoom-in' as any }}>
                 {currentDisplayImage
                   ? <Image key={selectedImage} src={currentDisplayImage} alt={product.name} fill style={{ objectFit:'cover' }} className="slide-anim" priority />
                   : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:64 }}>📦</div>
@@ -623,10 +819,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 {/* Desktop arrows */}
                 {allImages.length > 1 && (
                   <>
-                    <button className="gal-arrow left" onClick={() => goToImage(selectedImage - 1)} disabled={selectedImage === 0} aria-label="Previous">
+                    <button className="gal-arrow left" onClick={e => { e.stopPropagation(); goToImage(selectedImage - 1); }} disabled={selectedImage === 0} aria-label="Previous">
                       <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7"/></svg>
                     </button>
-                    <button className="gal-arrow right" onClick={() => goToImage(selectedImage + 1)} disabled={selectedImage === allImages.length - 1} aria-label="Next">
+                    <button className="gal-arrow right" onClick={e => { e.stopPropagation(); goToImage(selectedImage + 1); }} disabled={selectedImage === allImages.length - 1} aria-label="Next">
                       <svg width="14" height="14" fill="none" stroke="#333" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/></svg>
                     </button>
                   </>
@@ -901,6 +1097,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
             ))}
           </div>
         </section>
+      )}
+
+      {/* ZOOM VIEWER */}
+      {zoomViewerOpen && currentDisplayImage && (
+        <ZoomViewer
+          images={allImages}
+          selectedIndex={selectedImage}
+          onClose={() => setZoomViewerOpen(false)}
+          onPrev={() => goToImage(selectedImage - 1)}
+          onNext={() => goToImage(selectedImage + 1)}
+        />
       )}
     </div>
   )
