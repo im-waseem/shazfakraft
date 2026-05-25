@@ -462,7 +462,7 @@ export default function Home() {
 
           {/* Desktop nav */}
           <nav className="nav-desktop" style={{ display: 'flex', gap: 28, marginLeft: 20 }}>
-            {[['/', 'Home'], ['/products', 'Products'], ['/about', 'About'], ['/contact', 'Contact']].map(([href, label]) => (
+            {[['/', 'Home'], ['/products', 'Products'], ['/track-order', 'Track Order'], ['/about', 'About'], ['/contact', 'Contact']].map(([href, label]) => (
               <Link key={href} href={href} className="nav-link">{label}</Link>
             ))}
           </nav>
@@ -524,7 +524,7 @@ export default function Home() {
               <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700, color: 'var(--gold)' }}>Menu</span>
               <button onClick={() => setMobileMenuOpen(false)} style={{ background: '#f5f5f5', border: 'none', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
-            {[['/', 'Home', '🏠'], ['/products', 'Products', '🛍'], ['/wishlist', 'Wishlist', '❤️'], ['/cart', 'Cart', '🛒'], ['/profile', 'Profile', '👤'], ['/about', 'About', 'ℹ️'], ['/contact', 'Contact', '📞']].map(([href, label, icon]) => (
+            {[['/', 'Home', '🏠'], ['/products', 'Products', '🛍'], ['/track-order', 'Track Order', '📦'], ['/wishlist', 'Wishlist', '❤️'], ['/cart', 'Cart', '🛒'], ['/profile', 'Profile', '👤'], ['/about', 'About', 'ℹ️'], ['/contact', 'Contact', '📞']].map(([href, label, icon]) => (
               <Link key={href} href={href} className="mob-nav-link" onClick={() => setMobileMenuOpen(false)}>
                 <span style={{ marginRight: 10 }}>{icon}</span>{label}
               </Link>

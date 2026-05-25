@@ -904,7 +904,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     const price      = priceForSize(size)
                     const isSelected = selectedSize === size
                     return (
-                      <button key={size} className={`sk-size-box${isSelected ? ' selected' : ''}`} disabled={!available} onClick={() => handleSizeSelect(size)}>
+ 
+ <button key={size} className={`sk-size-box${isSelected ? ' selected' : ''}`} disabled={!available} onClick={() => handleSizeSelect(size)}>
                         {isSelected && <span className="size-check">✓</span>}
                         <span className="size-label">{size}"</span>
                         {price !== null && <span className="size-price">₹{price.toLocaleString('en-IN')}</span>}
