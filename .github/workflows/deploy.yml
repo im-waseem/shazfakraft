@@ -30,7 +30,16 @@ jobs:
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" \
             >> ~/.ssh/known_hosts 2>/dev/null
 
-      # ── 3. Sync source to VPS ────────────────────────────
+      # ── 3. Ensure app directory exists on VPS ────────────
+      - name: Create app directory
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -p "${{ secrets.VPS_PORT }}" \
+              -o StrictHostKeyChecking=no \
+              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+              'mkdir -p /var/www/shazfakraft/logs'
+
+      # ── 4. Sync source to VPS ────────────────────────────
       # rsync transfers only changed files (~1–3 s for small diffs).
       # .env is excluded — it lives permanently on the VPS.
       - name: Sync source code
@@ -45,13 +54,8 @@ jobs:
             --exclude='.active_slot' \
             ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/shazfakraft/"
 
-      # ── 4. Blue-green deploy on VPS ──────────────────────
-      # deploy.sh:
-      #   • builds a fresh image in the inactive slot
-      #   • starts the new container, waits for healthcheck
-      #   • rewrites 00-upstream.conf → nginx -s reload (zero downtime)
-      #   • stops (keeps) the old slot for instant rollback
-      - name: Deploy (blue-green)
+      # ── 5. Deploy on VPS ─────────────────────────────────
+      - name: Deploy
         run: |
           ssh -i ~/.ssh/deploy_key \
               -p "${{ secrets.VPS_PORT }}" \
@@ -59,7 +63,7 @@ jobs:
               "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
               'bash /var/www/shazfakraft/scripts/deploy.sh'
 
-      # ── 5. Verify ─────────────────────────────────────────
+      # ── 6. Verify ─────────────────────────────────────────
       - name: Verify deployment
         run: |
           ssh -i ~/.ssh/deploy_key \
