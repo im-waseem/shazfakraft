@@ -569,6 +569,152 @@ export default function Home() {
         /* ── UTILITY ── */
         .divider{height:1px;background:var(--border);margin:0}
         @keyframes popIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+
+        /* ══════════════════════════════════════════════
+           MOBILE RESPONSIVENESS — all breakpoints
+        ══════════════════════════════════════════════ */
+
+        /* Touch devices: always show Add-to-Cart, remove hover-only effects */
+        @media(hover:none){
+          .p-actions{transform:none!important;position:relative;background:linear-gradient(0deg,rgba(255,251,245,.98) 60%,transparent)}
+          .p-card:hover{transform:none!important;box-shadow:none!important}
+          .p-card:hover .p-img{transform:none!important}
+          .add-btn{padding:11px;font-size:12px;border-radius:50px}
+        }
+
+        /* Safe-area insets for fixed floating buttons */
+        @supports(padding:env(safe-area-inset-bottom)){
+          .wa-container{bottom:calc(22px + env(safe-area-inset-bottom))}
+          .scroll-top{bottom:calc(22px + env(safe-area-inset-bottom))}
+        }
+
+        /* ── 480px and below ── */
+        @media(max-width:480px){
+          /* Announcement bar */
+          .ann-bar{padding:8px 12px}
+          .ann-text{font-size:11px;letter-spacing:.04em}
+
+          /* Hero */
+          .hero{padding:clamp(36px,8vw,52px) 16px clamp(52px,10vw,72px);overflow:hidden}
+          .hero-eyebrow{font-size:11px;letter-spacing:.16em;margin-bottom:10px}
+          .hero-sub{font-size:13px;margin-bottom:28px;padding:0 4px}
+
+          /* Hide large decorative SVG on mobile */
+          .hero > svg{display:none}
+
+          /* Search bar */
+          .search-input{padding:13px 48px 13px 46px;font-size:14px;border-radius:50px}
+          .search-icon{left:15px}
+          .search-clear{right:6px;padding:7px 14px;font-size:12px}
+
+          /* Category pills */
+          .cat-pills{gap:6px;margin-top:14px}
+          .cat-pill{padding:9px 14px;font-size:11px;min-height:40px;border-radius:50px}
+
+          /* Main layout */
+          .main-wrap{padding:18px 12px 48px;gap:16px}
+
+          /* Product toolbar */
+          .prod-toolbar{gap:8px}
+          .prod-toolbar > div:first-child p:first-child{font-size:17px}
+
+          /* Product grid */
+          .prod-grid{gap:10px}
+          .p-body{padding:8px 10px}
+          .p-cat{font-size:8.5px}
+          .p-name{font-size:12px}
+          .p-price{font-size:14px}
+          .p-compare{font-size:10.5px;margin-left:5px}
+          .p-low-stock{font-size:9.5px}
+
+          /* Wishlist button */
+          .wl-btn{width:28px;height:28px;font-size:12px;top:7px;right:7px}
+
+          /* Badges */
+          .badge-disc,.badge-featured{font-size:8.5px;padding:2px 6px}
+
+          /* Category grid */
+          .cat-grid{grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+          .cat-card{padding:14px 8px}
+          .cat-card-icon{width:42px;height:42px;font-size:18px}
+          .cat-card-name{font-size:11px}
+
+          /* Guest banner */
+          .guest-banner{padding:8px 14px;font-size:11.5px;gap:8px}
+
+          /* Empty state */
+          .empty-state{padding:40px 18px}
+          .empty-icon{font-size:44px}
+          .empty-title{font-size:19px}
+
+          /* Load more */
+          .load-more-btn{padding:11px 24px;font-size:13px}
+
+          /* Footer */
+          .footer{padding:36px 16px 24px}
+          .footer-grid{gap:28px;margin-bottom:32px}
+          .footer-logo{font-size:24px}
+          .footer-bottom{flex-direction:column;align-items:center;text-align:center;gap:6px}
+          .footer-copy{font-size:11px}
+
+          /* Section title */
+          .section-title{font-size:clamp(1.3rem,5vw,1.8rem)}
+
+          /* WA popup width constraint */
+          .wa-popup{width:min(240px,calc(100vw - 80px));right:-4px}
+
+          /* Guest toast - allow wrapping */
+          .guest-toast{
+            white-space:normal;
+            max-width:calc(100vw - 40px);
+            flex-wrap:wrap;
+            justify-content:center;
+            text-align:center;
+            padding:10px 16px;
+            gap:7px;
+            bottom:76px
+          }
+        }
+
+        /* ── 375px and below ── */
+        @media(max-width:375px){
+          .hero-h1{font-size:clamp(1.9rem,9vw,2.5rem)}
+          .search-input{font-size:13px;padding:12px 44px 12px 44px}
+          .prod-grid{gap:8px}
+          .p-body{padding:7px 9px}
+          .p-name{font-size:11.5px}
+          .p-price{font-size:13px}
+          .main-wrap{padding:16px 10px 44px}
+          .cat-grid{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:7px}
+          .cat-card-icon{width:38px;height:38px;font-size:16px}
+          .cat-card-name{font-size:10.5px}
+        }
+
+        /* ── 320px ── */
+        @media(max-width:320px){
+          .hero-h1{font-size:clamp(1.7rem,9vw,2.2rem);margin-bottom:12px}
+          .hero-eyebrow{font-size:10px;letter-spacing:.12em}
+          .hero-sub{font-size:12px;margin-bottom:22px}
+          .search-input{padding:11px 40px;font-size:13px}
+          .main-wrap{padding:14px 8px 40px}
+          .prod-grid{gap:7px}
+          .p-body{padding:6px 8px}
+          .p-name{font-size:11px}
+          .footer{padding:28px 12px 20px}
+          .footer-grid{gap:22px}
+        }
+
+        /* ── Tablets (481px–768px) ── */
+        @media(min-width:481px) and (max-width:768px){
+          .prod-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+          .main-wrap{padding:24px 16px 60px}
+          .hero{padding:clamp(52px,8vw,80px) 20px clamp(72px,10vw,100px)}
+        }
+
+        /* ── Mobile sidebar width safety ── */
+        @media(max-width:360px){
+          .mob-sidebar{width:min(272px,calc(100vw - 32px))}
+        }
       `}</style>
 
       {/* ══ ANNOUNCEMENT BAR ══════════════════════════════════════════════════ */}

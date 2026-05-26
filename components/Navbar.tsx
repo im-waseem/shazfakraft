@@ -47,6 +47,8 @@ export default function Navbar() {
           z-index: 40;
           box-shadow: 0 2px 16px rgba(200,134,10,.05);
           width: 100%;
+          max-width: 100vw;
+          overflow: hidden;
           font-family: 'Nunito', system-ui, sans-serif;
         }
         .site-nav-inner {
@@ -56,26 +58,31 @@ export default function Navbar() {
           display: flex;
           align-items: center;
           height: 62px;
-          gap: 16px;
+          gap: 12px;
         }
         .site-logo {
           font-family: "Cormorant Garamond", serif;
-          font-size: 26px;
+          font-size: 24px;
           font-weight: 700;
           color: #c8860a;
           letter-spacing: -.01em;
           line-height: 1;
           text-decoration: none;
           flex-shrink: 0;
+          min-width: 0;
         }
         .site-logo small {
-          font-size: 8px;
+          font-size: 7.5px;
           font-weight: 800;
-          letter-spacing: .22em;
+          letter-spacing: .18em;
           text-transform: uppercase;
           color: #9a8a7a;
           display: block;
           margin-top: -1px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 140px;
         }
         .site-nav-links {
           display: flex;
@@ -85,6 +92,14 @@ export default function Navbar() {
         }
         @media (max-width: 768px) {
           .site-nav-links { display: none !important; }
+          .site-nav-inner { padding: 0 14px; gap: 8px; }
+          .site-logo { font-size: 22px; }
+          .site-logo small { max-width: 110px; font-size: 7px; letter-spacing: .14em; }
+        }
+        @media (max-width: 360px) {
+          .site-nav-inner { padding: 0 10px; gap: 4px; }
+          .site-logo { font-size: 20px; }
+          .site-logo small { display: none; }
         }
         .site-nav-link {
           color: #5a4a3a;
@@ -98,23 +113,31 @@ export default function Navbar() {
           white-space: nowrap;
         }
         .site-nav-link:hover { color: #c8860a; border-bottom-color: #c8860a; }
-        .site-spacer { flex: 1; }
+        .site-spacer { flex: 1; min-width: 0; }
         .site-icon-btn {
           position: relative;
           color: #5a4a3a;
           display: flex;
-          padding: 8px;
+          align-items: center;
+          justify-content: center;
+          padding: 10px;
+          min-width: 44px;
+          min-height: 44px;
           border-radius: 10px;
           text-decoration: none;
           transition: background .15s;
+          flex-shrink: 0;
         }
         .site-icon-btn:hover { background: #fdf3e3; }
+        @media (max-width: 480px) {
+          .site-icon-btn { padding: 8px; min-width: 40px; min-height: 40px; }
+        }
         .site-badge {
           position: absolute;
-          top: 5px;
-          right: 5px;
-          width: 14px;
-          height: 14px;
+          top: 4px;
+          right: 4px;
+          width: 15px;
+          height: 15px;
           border-radius: 50%;
           font-size: 8px;
           font-weight: 800;
@@ -129,10 +152,15 @@ export default function Navbar() {
           background: none;
           border: none;
           cursor: pointer;
-          padding: 6px;
+          padding: 10px 8px;
+          min-width: 44px;
+          min-height: 44px;
           color: #1c1410;
           border-radius: 8px;
           display: none;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
         }
         @media (max-width: 768px) { .site-burger { display: flex; } }
 
@@ -144,14 +172,19 @@ export default function Navbar() {
         }
         .site-mob-panel {
           position: fixed; left: 0; top: 0; bottom: 0; z-index: 51;
-          width: 280px; background: #fff; padding: 24px;
-          display: flex; flex-direction: column; gap: 6px;
+          width: min(288px, calc(100vw - 48px));
+          background: #fff;
+          padding: 20px 20px env(safe-area-inset-bottom, 20px);
+          display: flex; flex-direction: column; gap: 4px;
           animation: slideRight .25s cubic-bezier(.4,0,.2,1);
+          overflow-y: auto;
         }
         @keyframes slideRight { from { transform: translateX(-100%); } to { transform: none; } }
         .site-mob-link {
-          display: block;
-          padding: 12px 14px;
+          display: flex;
+          align-items: center;
+          padding: 14px 16px;
+          min-height: 52px;
           border-radius: 10px;
           color: #1c1410;
           font-weight: 600;
@@ -159,7 +192,7 @@ export default function Navbar() {
           text-decoration: none;
           transition: background .15s;
         }
-        .site-mob-link:hover { background: #fdf3e3; color: #c8860a; }
+        .site-mob-link:hover, .site-mob-link:active { background: #fdf3e3; color: #c8860a; }
       `}</style>
 
       <header className="site-navbar">

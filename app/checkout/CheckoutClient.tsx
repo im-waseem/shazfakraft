@@ -174,11 +174,35 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
   return (
     <div style={{ minHeight: '100vh', background: '#faf8f5', fontFamily: "'DM Sans', sans-serif", color: '#1a1410' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-      .input{width:100%;padding:11px 12px;border:1.5px solid #d4c8b8;border-radius:10px}.btn{background:#b8860b;color:#fff;border:none;border-radius:999px;padding:12px 18px;font-weight:700;cursor:pointer}
-      .ghost{background:#fff;border:1.5px solid #d4c8b8;color:#6b5c4a}.card{background:#fff;border:1px solid #e8e0d4;border-radius:16px}
-      .pay{border:1.5px solid #d4c8b8;border-radius:12px;padding:12px;cursor:pointer}.pay.active{border-color:#b8860b;background:#fef9ed}
-      @media(max-width:860px){.grid{grid-template-columns:1fr!important}.sticky{position:static!important}}
-      .cpn-input{flex:1;padding:10px 12px;border:1.5px solid #d4c8b8;border-radius:8px;font-size:13px;font-family:monospace;text-transform:uppercase;outline:none}
+      .input{width:100%;padding:11px 12px;border:1.5px solid #d4c8b8;border-radius:10px;font-size:max(16px,1em);font-family:inherit;outline:none;transition:border-color .2s;background:#fff}
+      .input:focus{border-color:#b8860b;box-shadow:0 0 0 3px rgba(184,134,11,.1)}
+      .btn{background:#b8860b;color:#fff;border:none;border-radius:999px;padding:12px 20px;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px;white-space:nowrap;transition:all .2s}
+      .btn:hover:not(:disabled){background:#a07508}
+      .btn:disabled{opacity:.5;cursor:not-allowed}
+      .ghost{background:#fff;border:1.5px solid #d4c8b8;color:#6b5c4a}
+      .ghost:hover:not(:disabled){border-color:#b8860b;color:#b8860b;background:#fef9ed}
+      .card{background:#fff;border:1px solid #e8e0d4;border-radius:16px}
+      .pay{border:1.5px solid #d4c8b8;border-radius:12px;padding:14px 16px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:#1a1410;transition:all .2s;text-align:left;width:100%;text-transform:uppercase;letter-spacing:.04em;background:#fff}
+      .pay.active{border-color:#b8860b;background:#fef9ed;color:#b8860b}
+      .ship-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+      .ship-form-full{grid-column:1/-1}
+      .btn-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+      .btn-row .btn{flex:1;min-width:120px;justify-content:center;display:inline-flex;align-items:center}
+      @media(max-width:860px){
+        .grid{grid-template-columns:1fr!important}
+        .sticky{position:static!important}
+      }
+      @media(max-width:600px){
+        .ship-form{grid-template-columns:1fr}
+        .ship-form-full{grid-column:auto}
+        .btn-row{flex-direction:column}
+        .btn-row .btn{width:100%;min-width:unset;text-align:center;justify-content:center}
+      }
+      @media(max-width:480px){
+        .pay{padding:12px 14px;font-size:13px}
+        .card{padding:16px!important}
+      }
+      .cpn-input{flex:1;padding:10px 12px;border:1.5px solid #d4c8b8;border-radius:8px;font-size:max(16px,1em);font-family:monospace;text-transform:uppercase;outline:none}
       .cpn-input:focus{border-color:#b8860b}
       .cpn-applied{background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:10px 14px}
       `}</style>
@@ -205,17 +229,17 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
           {step === 1 && (
             <>
               <h2>Shipping Details</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+              <div className="ship-form">
                 <input className="input" placeholder="First name" value={form.firstName} onChange={e => setField('firstName', e.target.value)} />
                 <input className="input" placeholder="Last name" value={form.lastName} onChange={e => setField('lastName', e.target.value)} />
-                <input className="input" placeholder="Email" value={form.email} onChange={e => setField('email', e.target.value)} />
-                <input className="input" placeholder="Phone" value={form.phone} onChange={e => setField('phone', e.target.value)} />
-                <input className="input" placeholder="Address" style={{ gridColumn: '1 / -1' }} value={form.address} onChange={e => setField('address', e.target.value)} />
+                <input className="input" placeholder="Email" type="email" value={form.email} onChange={e => setField('email', e.target.value)} />
+                <input className="input" placeholder="Phone" type="tel" value={form.phone} onChange={e => setField('phone', e.target.value)} />
+                <input className="input ship-form-full" placeholder="Address" value={form.address} onChange={e => setField('address', e.target.value)} />
                 <input className="input" placeholder="City" value={form.city} onChange={e => setField('city', e.target.value)} />
                 <input className="input" placeholder="State" value={form.state} onChange={e => setField('state', e.target.value)} />
-                <input className="input" placeholder="PIN" value={form.pin} onChange={e => setField('pin', e.target.value)} />
+                <input className="input" placeholder="PIN code" type="tel" inputMode="numeric" value={form.pin} onChange={e => setField('pin', e.target.value)} />
               </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <div className="btn-row">
                 <button className="btn ghost" onClick={() => setStep(0)}>Back</button>
                 <button className="btn" onClick={() => setStep(2)} disabled={!form.firstName || !form.email || !form.phone || !form.address}>Continue to Payment</button>
               </div>
@@ -226,11 +250,20 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
             <>
               <h2>Payment Method</h2>
               <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                {(['card', 'upi', 'cod'] as PayMethod[]).map(m => <div key={m} className={`pay ${payMethod===m?'active':''}`} onClick={() => setPayMethod(m)}>{m.toUpperCase()}</div>)}
+                {(['card', 'upi', 'cod'] as PayMethod[]).map(m => (
+                  <button key={m} className={`pay ${payMethod===m?'active':''}`} onClick={() => setPayMethod(m)}>
+                    {m === 'card' ? '💳 Credit / Debit Card' : m === 'upi' ? '📱 UPI' : '💵 Cash on Delivery'}
+                  </button>
+                ))}
               </div>
-              {payMethod === 'card' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}><input className="input" placeholder="Card number" value={form.cardNumber} onChange={e => setField('cardNumber', e.target.value)} /><input className="input" placeholder="Expiry" value={form.cardExpiry} onChange={e => setField('cardExpiry', e.target.value)} /></div>}
-              {payMethod === 'upi' && <input className="input" style={{ marginTop: 10 }} placeholder="UPI ID" value={form.upiId} onChange={e => setField('upiId', e.target.value)} />}
-              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              {payMethod === 'card' && (
+                <div className="ship-form" style={{ marginTop: 12 }}>
+                  <input className="input" placeholder="Card number" inputMode="numeric" value={form.cardNumber} onChange={e => setField('cardNumber', e.target.value)} />
+                  <input className="input" placeholder="Expiry MM/YY" value={form.cardExpiry} onChange={e => setField('cardExpiry', e.target.value)} />
+                </div>
+              )}
+              {payMethod === 'upi' && <input className="input" style={{ marginTop: 12 }} placeholder="UPI ID (e.g. name@upi)" value={form.upiId} onChange={e => setField('upiId', e.target.value)} />}
+              <div className="btn-row">
                 <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
                 <button className="btn" onClick={() => setStep(3)}>Review Order</button>
               </div>
@@ -249,7 +282,7 @@ export default function CheckoutClient({ orders }: { orders: Order[] }) {
                   <span style={{ marginLeft: 8, color: '#15803d' }}>−₹{appliedCoupon.discount_amount.toFixed(0)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <div className="btn-row">
                 <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
                 <button className="btn" onClick={placeOrder} disabled={processing}>
                   {processing ? 'Placing Order...' : `Place Order · ₹${finalTotal.toFixed(0)}`}

@@ -774,6 +774,55 @@ const ProductReviews = lazy(() => import('@/components/ProductReviews'))
         .sk-more-body { padding:11px; }
         .sk-more-name { font-size:12.5px; line-height:1.4; color:#1a1a1a; margin-bottom:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-weight:600; }
         .sk-more-price { font-size:14px; font-weight:900; color:#b8860b; font-family:'Syne',sans-serif; }
+
+        /* ══ MOBILE RESPONSIVENESS ══ */
+        @media(max-width:480px){
+          .sk-nav { padding:0 12px; height:54px; gap:10px; }
+          .sk-logo { font-size:16px; }
+          .sk-logo small { font-size:7px; letter-spacing:.12em; }
+          .sk-cart-btn { padding:8px 14px; font-size:12px; gap:5px; }
+          .sk-crumb { padding:8px 12px; font-size:11px; }
+          .sk-info { padding:16px 14px; }
+          .sk-title { font-size:18px; }
+          .sk-short-desc { font-size:13px; }
+          .sk-price-main { font-size:28px; }
+          .sk-price-box { padding:12px 14px; }
+          .sk-size-box { min-width:64px; padding:9px 12px; }
+          .sk-size-box .size-label { font-size:12.5px; }
+          .sk-btn-cart { padding:14px; font-size:14px; gap:7px; border-radius:12px; }
+          .sk-btn-buy { padding:13px; font-size:14px; gap:7px; border-radius:12px; }
+          .sk-btn-wish { padding:11px; font-size:13px; border-radius:12px; }
+          .sk-badges { gap:6px; padding:12px 0; }
+          .sk-badge { font-size:10.5px; padding:4px 8px; }
+          .sk-tab-btn { font-size:12.5px; padding:12px 6px; }
+          .sk-tab-content { padding:18px 14px; font-size:13px; }
+          .sk-more-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
+          .sk-more-wrap { padding:0 10px; margin-bottom:28px; }
+          .sk-more-body { padding:9px; }
+          .sk-more-name { font-size:12px; }
+          .sk-more-price { font-size:13px; }
+          .sk-main { margin:12px 0; border-radius:16px; }
+          .sk-summary-bar { font-size:12px; padding:8px 12px; }
+          .sk-seller { padding:12px; }
+        }
+        @media(max-width:360px){
+          .sk-nav { padding:0 10px; gap:6px; }
+          .sk-logo small { display:none; }
+          .sk-cart-btn { padding:7px 12px; font-size:11px; }
+          .sk-info { padding:14px 12px; }
+          .sk-title { font-size:16px; }
+          .sk-price-main { font-size:24px; }
+          .sk-qty-row { gap:8px; }
+          .sk-qty-btn { width:38px; height:38px; }
+          .sk-qty-num { width:40px; font-size:14px; }
+          .sk-badge { font-size:10px; padding:3px 7px; }
+          .sk-tab-btn { font-size:11.5px; padding:11px 4px; }
+          .sk-more-grid { gap:8px; }
+        }
+        @media(hover:none){
+          .sk-img-main:hover img { transform:none!important; }
+          .sk-more-card:hover { transform:none!important; }
+        }
       `}</style>
 
       {/* NAV */}
