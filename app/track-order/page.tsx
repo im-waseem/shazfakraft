@@ -29,7 +29,7 @@ type TrackOrder = {
 const FLOW = ['pending', 'confirmed', 'processing', 'shipped', 'delivered']
 
 export default function TrackOrderPage() {
-  const whatsappNumber = '916361236653'
+  const whatsappNumber = '917022831935'
   const [orderNumber, setOrderNumber] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -103,7 +103,7 @@ export default function TrackOrderPage() {
           onClick={handleWhatsAppSupport}
           style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid #d8c9b4', background: '#fff', fontWeight: 700, cursor: 'pointer' }}
         >
-          💬 Discuss on WhatsApp (+91 63612 36653)
+          💬 Discuss on WhatsApp (+91 70228 31935)
         </button>
 
         {order && (

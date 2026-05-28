@@ -28,6 +28,7 @@ async function getCategories() {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+const SHOW_SHOP_BY_CATEGORY = false // Set to true to re-enable the Shop by Category section
 const CAT_ICONS = ['📖', '🕌', '📿', '🎁', '🏠', '✨', '🌙', '⭐', '🤲', '💎']
 const DEFAULT_ANNOUNCEMENTS = [
   'Free shipping on orders over ₹499 ✦ Shop now',
@@ -787,7 +788,7 @@ export default function Home() {
         </section>
 
         {/* ══ CATEGORY SHOWCASE ════════════════════════════════════════════════ */}
-        {categories.length > 0 && !searchQuery && selectedCategories.length === 0 && (
+        {SHOW_SHOP_BY_CATEGORY && categories.length > 0 && !searchQuery && selectedCategories.length === 0 && (
           <div style={{ padding: '44px 20px 0', width: '100%' }}>
             <div className="section">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 12 }}>
@@ -980,7 +981,7 @@ export default function Home() {
             <div>
               <p className="footer-head">Contact</p>
               <p style={{ color: '#8a6a4a', fontSize: 13, marginBottom: 6 }}>support@shazfakraft.in</p>
-              <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer"
+              <a href="https://wa.me/917022831935" target="_blank" rel="noopener noreferrer"
                 style={{ color: '#25D366', fontSize: 13, textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                 ☎ WhatsApp Us
               </a>
@@ -1006,7 +1007,7 @@ export default function Home() {
               setShowWaPopup(false);
               sessionStorage.setItem('wa-popup-dismissed', 'true');
             }} aria-label="Close popup">×</button>
-            <div className="wa-popup-content" onClick={() => window.open("https://wa.me/916361236653", "_blank")}>
+            <div className="wa-popup-content" onClick={() => window.open("https://wa.me/917022831935", "_blank")}>
               <div className="wa-popup-header">
                 <span className="wa-dot"></span>
                 <span className="wa-status">Online</span>
@@ -1016,7 +1017,7 @@ export default function Home() {
             <div className="wa-popup-arrow"></div>
           </div>
         )}
-        <a href="https://wa.me/916361236653" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
+        <a href="https://wa.me/917022831935" target="_blank" rel="noopener noreferrer" className="wa-bubble" aria-label="Chat on WhatsApp">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
             <path d="M12.012 2C6.48 2 2 6.48 2 12.012c0 1.765.46 3.42 1.258 4.887L2 22l5.247-1.378a9.957 9.957 0 0 0 4.765 1.22c5.532 0 10.012-4.48 10.012-10.012S17.544 2 12.012 2zm6.757 14.288c-.282.788-1.42 1.442-1.956 1.503-.497.056-.99.27-3.178-.582-2.793-1.09-4.577-3.92-4.717-4.108-.138-.187-1.127-1.493-1.127-2.846 0-1.353.708-2.015.96-2.28.25-.264.55-.33.73-.33.18 0 .36 0 .52.008.173.007.404-.067.63.475.228.548.78 1.902.847 2.038.067.135.111.293.02.476-.09.18-.135.293-.27.45-.135.158-.283.353-.404.474-.136.136-.28.283-.12.557.16.273.712 1.17 1.528 1.89.1.088.196.175.29.256.713.626 1.238.835 1.488.986.25.152.395.127.542-.045.148-.172.63-.736.797-.986.167-.25.334-.21.56-.127.228.083 1.448.68 1.697.804.248.125.413.187.473.29.06.103.06.59-.22.378z" />
           </svg>

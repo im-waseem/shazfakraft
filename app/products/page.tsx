@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-const WHATSAPP_NUMBER = '916361236653'
+const WHATSAPP_NUMBER = '917022831935'
 
 const COLOR_MAP: Record<string, string> = {
   gold: '#d4a843', silver: '#c0c0c0', black: '#1a1a1a', white: '#f0f0f0',

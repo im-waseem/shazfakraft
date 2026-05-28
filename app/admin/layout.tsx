@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MobileSidebarToggle from './mobile-sidebar-toggle'
+import NotificationBell from '@/components/admin/NotificationBell'
 
 const navItems = [
   {
@@ -435,14 +436,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           color: var(--ink);
           box-shadow: 0 2px 8px rgba(0,0,0,.07);
         }
-        .notif-dot {
-          position: absolute;
-          top: 7px; right: 7px;
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: var(--accent);
-          border: 1.5px solid white;
-        }
         .view-store-link {
           display: inline-flex;
           align-items: center;
@@ -587,13 +580,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Search anything…
               <span className="kbd">⌘K</span>
             </div>
-            <button className="hdr-btn">
-              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-              </svg>
-              <span className="notif-dot" />
-            </button>
+            <NotificationBell />
             <Link href="/" target="_blank" className="view-store-link">
               View Store
               <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">

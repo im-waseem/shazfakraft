@@ -383,7 +383,7 @@ export default function AboutPage() {
                     fontSize: "0.9rem",
                   }}
                 >
-                  SS
+                  WA
                 </div>
                 <div>
                   <p
@@ -395,7 +395,7 @@ export default function AboutPage() {
                       margin: 0,
                     }}
                   >
-                    Syed Shaiz
+                    Waseem Akram
                   </p>
                   <p
                     style={{
@@ -408,7 +408,7 @@ export default function AboutPage() {
                       textTransform: "uppercase",
                     }}
                   >
-                    Founder, Waseem Akram
+                    Founder
                   </p>
                 </div>
               </div>

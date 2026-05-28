@@ -18,7 +18,7 @@ const contactInfo = [
   {
     icon: "◍",
     label: "WhatsApp",
-    value: "+916361236653",
+    value: "+917022831935",
     sub: "9am – 9pm, Mon – Sat",
   },
 ];
