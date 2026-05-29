@@ -40,12 +40,14 @@ export default function Navbar() {
     <>
       <style>{`
         .site-navbar {
-          background: #fff;
-          border-bottom: 1px solid #ecdcc8;
+          background: rgba(255, 251, 245, 0.85);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-bottom: 1px solid rgba(236, 220, 200, 0.6);
           position: sticky;
           top: 0;
           z-index: 40;
-          box-shadow: 0 2px 16px rgba(200,134,10,.05);
+          box-shadow: 0 2px 16px rgba(200, 134, 10, 0.04);
           width: 100%;
           max-width: 100vw;
           overflow: hidden;
@@ -61,28 +63,20 @@ export default function Navbar() {
           gap: 12px;
         }
         .site-logo {
-          font-family: "Cormorant Garamond", serif;
-          font-size: 24px;
-          font-weight: 700;
-          color: #c8860a;
-          letter-spacing: -.01em;
-          line-height: 1;
+          display: flex;
+          align-items: center;
           text-decoration: none;
           flex-shrink: 0;
-          min-width: 0;
         }
-        .site-logo small {
-          font-size: 7.5px;
-          font-weight: 800;
-          letter-spacing: .18em;
-          text-transform: uppercase;
-          color: #9a8a7a;
+        .site-logo-img {
+          height: 48px;
+          width: auto;
+          object-fit: contain;
           display: block;
-          margin-top: -1px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 140px;
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .site-logo-img:hover {
+          transform: scale(1.06);
         }
         .site-nav-links {
           display: flex;
@@ -93,13 +87,11 @@ export default function Navbar() {
         @media (max-width: 768px) {
           .site-nav-links { display: none !important; }
           .site-nav-inner { padding: 0 14px; gap: 8px; }
-          .site-logo { font-size: 22px; }
-          .site-logo small { max-width: 110px; font-size: 7px; letter-spacing: .14em; }
+          .site-logo-img { height: 40px; }
         }
         @media (max-width: 360px) {
           .site-nav-inner { padding: 0 10px; gap: 4px; }
-          .site-logo { font-size: 20px; }
-          .site-logo small { display: none; }
+          .site-logo-img { height: 34px; }
         }
         .site-nav-link {
           color: #5a4a3a;
@@ -206,7 +198,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="site-logo">
-            Shazfa<small>Islamic Wall Art Store</small>
+            <img src="/logo.png" alt="Shazfa Kraft" className="site-logo-img" />
           </Link>
 
           {/* Desktop links */}
@@ -249,7 +241,10 @@ export default function Navbar() {
         <>
           <div className="site-mob-overlay" onClick={() => setMobileOpen(false)} />
           <div className="site-mob-panel">
-            <button onClick={() => setMobileOpen(false)} style={{ alignSelf: 'flex-end', background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9a8a7a', padding: 4 }}>✕</button>
+            <button onClick={() => setMobileOpen(false)} style={{ alignSelf: 'flex-end', background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9a8a7a', padding: 4, marginBottom: 8 }}>✕</button>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, padding: '0 10px' }}>
+              <img src="/logo.png" alt="Shazfa Kraft" style={{ height: '52px', width: 'auto', objectFit: 'contain' }} />
+            </div>
             <Link href="/" className="site-mob-link" onClick={() => setMobileOpen(false)}>🏠 Home</Link>
             <Link href="/products" className="site-mob-link" onClick={() => setMobileOpen(false)}>🛍️ Products</Link>
             <Link href="/track-order" className="site-mob-link" onClick={() => setMobileOpen(false)}>📦 Track Order</Link>

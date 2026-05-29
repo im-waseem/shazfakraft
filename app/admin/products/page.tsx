@@ -46,6 +46,20 @@ type ColorRow = {
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 const uid = () => Math.random().toString(36).slice(2)
 const INCH_PRESETS = ['6x8','8x10','9x12','12x16','16x20','18x24','24x32','24x36']
+
+/* ─── SKU generators ──────────────────────────────────────────────────────── */
+function generateProductSku(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  const initials = words.slice(0, 5).map(w => w[0].toUpperCase()).join('')
+  const suffix = String(Date.now()).slice(-3)
+  return initials ? `${initials}-${suffix}` : `SKU-${suffix}`
+}
+
+function generateVariantSku(productSku: string, size: string): string {
+  const sizeNorm = size.toUpperCase().replace(/\s+/g, '')
+  const base = productSku.replace(/-\d{3}$/, '').trim()
+  return base && sizeNorm ? `${base}-${sizeNorm}` : sizeNorm || base || ''
+}
 const COLOR_OPTIONS = [
   { name: 'Gold',      hex: '#c9a84c' },
   { name: 'Silver',    hex: '#a8a8a8' },
@@ -381,13 +395,14 @@ function VariantMatrix({ variants }: { variants: ProductVariant[] }) {
 function SplitVariantEditor({
   sizeRows, colorRows,
   onSizeChange, onColorChange,
-  showToast,
+  showToast, productSku,
 }: {
   sizeRows: SizeRow[]
   colorRows: ColorRow[]
   onSizeChange: (r: SizeRow[]) => void
   onColorChange: (r: ColorRow[]) => void
   showToast: (msg: string, ok?: boolean) => void
+  productSku: string
 }) {
   const supabase = createClient()
 
@@ -397,7 +412,7 @@ function SplitVariantEditor({
   const removeSize = (id: string) =>
     onSizeChange(sizeRows.map(r => r.id === id ? { ...r, _delete: true } : r))
   const addSize = (preset = '') =>
-    onSizeChange([...sizeRows, { id: uid(), size_inches: preset, sku: '', price: 0, compare_price: 0, inventory_quantity: 0, is_active: true, _isNew: true }])
+    onSizeChange([...sizeRows, { id: uid(), size_inches: preset, sku: generateVariantSku(productSku, preset), price: 0, compare_price: 0, inventory_quantity: 0, is_active: true, _isNew: true }])
 
   /* ── Color helpers ── */
   const updateColor = (id: string, patch: Partial<ColorRow>) =>
@@ -493,9 +508,18 @@ function SplitVariantEditor({
                       </td>
                       {/* SKU */}
                       <td>
-                        <input type="text" value={row.sku} placeholder="SKU" className="inp-sm"
-                          onChange={e => updateSize(row.id, { sku: e.target.value })}
-                          style={{ width:64, fontFamily:'monospace' }} />
+                        <div style={{ display:'flex', gap:3, alignItems:'center' }}>
+                          <input type="text" value={row.sku} placeholder="Auto" className="inp-sm"
+                            onChange={e => updateSize(row.id, { sku: e.target.value })}
+                            style={{ width:68, fontFamily:'monospace', fontSize:10.5 }} />
+                          <button type="button" title="Regenerate SKU"
+                            onClick={() => updateSize(row.id, { sku: generateVariantSku(productSku, row.size_inches) })}
+                            style={{ width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid var(--sand-200)', borderRadius:5, background:'white', cursor:'pointer', color:'var(--sand-400)', flexShrink:0, fontSize:11, transition:'all .15s' }}
+                            onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color='var(--accent)'; (e.currentTarget as HTMLButtonElement).style.borderColor='var(--accent)' }}
+                            onMouseOut={e  => { (e.currentTarget as HTMLButtonElement).style.color='var(--sand-400)'; (e.currentTarget as HTMLButtonElement).style.borderColor='var(--sand-200)' }}>
+                            ↺
+                          </button>
+                        </div>
                       </td>
                       {/* Price */}
                       <td>
@@ -696,6 +720,7 @@ export default function AdminProductsPage() {
   const [sizeRows,     setSizeRows]    = useState<SizeRow[]>([])
   const [colorRows,    setColorRows]   = useState<ColorRow[]>([])
   const [saving,       setSaving]      = useState(false)
+  const [skuManual,    setSkuManual]   = useState(false)
   const [expandedId,   setExpandedId]  = useState<string|null>(null)
   const [search,       setSearch]      = useState('')
   const [toast,        setToast]       = useState<{msg:string;ok:boolean}|null>(null)
@@ -867,7 +892,7 @@ export default function AdminProductsPage() {
     return supabase.storage.from('product-images').getPublicUrl(data.path).data.publicUrl
   }
 
-  const resetForm = () => { setFormData({...EMPTY_FORM}); setSizeRows([]); setColorRows([]); setEditing(null) }
+  const resetForm = () => { setFormData({...EMPTY_FORM}); setSizeRows([]); setColorRows([]); setEditing(null); setSkuManual(false) }
 
   const filtered = products.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku?.toLowerCase()||'').includes(search.toLowerCase())
@@ -973,8 +998,9 @@ export default function AdminProductsPage() {
                     <input required type="text" value={formData.name} className="inp" placeholder="e.g. Ayatul Kursi Acrylic Wall Art"
                       onChange={e => {
                         const name = e.target.value
-                        fd('name',name)
-                        fd('slug',name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))
+                        fd('name', name)
+                        fd('slug', name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''))
+                        if (!skuManual && !editing) fd('sku', generateProductSku(name))
                       }}/>
                   </div>
                   <div>
@@ -982,8 +1008,25 @@ export default function AdminProductsPage() {
                     <input required type="text" value={formData.slug} onChange={e=>fd('slug',e.target.value)} className="inp" style={{ fontFamily:'monospace', fontSize:12.5 }}/>
                   </div>
                   <div>
-                    <label className="form-label">SKU</label>
-                    <input type="text" value={formData.sku} onChange={e=>fd('sku',e.target.value)} className="inp" placeholder="AK-001" style={{ fontFamily:'monospace' }}/>
+                    <label className="form-label">
+                      SKU
+                      {!editing && !skuManual && formData.name && (
+                        <span style={{ marginLeft:6, fontSize:10, fontWeight:600, color:'var(--accent)', background:'rgba(200,98,42,.1)', padding:'1px 6px', borderRadius:4, letterSpacing:'.04em' }}>AUTO</span>
+                      )}
+                    </label>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <input type="text" value={formData.sku}
+                        onChange={e => { setSkuManual(true); fd('sku', e.target.value) }}
+                        className="inp" placeholder="e.g. AKWA-001"
+                        style={{ fontFamily:'monospace', flex:1 }}/>
+                      <button type="button" title="Regenerate SKU from product name"
+                        onClick={() => { setSkuManual(false); fd('sku', generateProductSku(formData.name)) }}
+                        style={{ flexShrink:0, padding:'0 11px', height:40, border:'1px solid var(--sand-200)', borderRadius:8, background:'white', cursor:'pointer', color:'var(--sand-500)', fontSize:14, fontWeight:700, transition:'all .15s', display:'flex', alignItems:'center', gap:4 }}
+                        onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color='var(--accent)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(200,98,42,.4)' }}
+                        onMouseOut={e  => { (e.currentTarget as HTMLButtonElement).style.color='var(--sand-500)'; (e.currentTarget as HTMLButtonElement).style.borderColor='var(--sand-200)' }}>
+                        ↺
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="form-label">Category</label>
@@ -1092,6 +1135,7 @@ export default function AdminProductsPage() {
                   onSizeChange={setSizeRows}
                   onColorChange={setColorRows}
                   showToast={showToast}
+                  productSku={formData.sku}
                 />
               </div>
 
