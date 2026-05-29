@@ -51,7 +51,7 @@ export default function Navbar() {
           width: 100%;
           max-width: 100vw;
           overflow: hidden;
-          font-family: 'Nunito', system-ui, sans-serif;
+          font-family: 'Inter', system-ui, sans-serif;
         }
         .site-nav-inner {
           max-width: 1340px;
@@ -95,13 +95,13 @@ export default function Navbar() {
         }
         .site-nav-link {
           color: #5a4a3a;
-          font-size: 13px;
-          font-weight: 700;
+          font-size: 0.9375rem;
+          font-weight: 500;
           text-decoration: none;
           padding: 5px 0;
           border-bottom: 2px solid transparent;
           transition: all .18s;
-          letter-spacing: .02em;
+          letter-spacing: 0.005em;
           white-space: nowrap;
         }
         .site-nav-link:hover { color: #c8860a; border-bottom-color: #c8860a; }
@@ -179,8 +179,8 @@ export default function Navbar() {
           min-height: 52px;
           border-radius: 10px;
           color: #1c1410;
-          font-weight: 600;
-          font-size: 15px;
+          font-weight: 500;
+          font-size: 0.9375rem;
           text-decoration: none;
           transition: background .15s;
         }
